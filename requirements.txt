@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+yfinance
+pandas
+pykrx
+requests
+certifi

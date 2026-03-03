@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Value-up Lens V2 | Real-time Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap');
+        body { font-family: 'Pretendard', sans-serif; background-color: #f1f5f9; padding: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="max-w-5xl mx-auto space-y-6">
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+            <div class="flex flex-col md:flex-row gap-4 items-center">
+                <div class="flex-1 w-full">
+                    <label class="text-xs font-bold text-gray-400 uppercase mb-1 block">Stock Code Search</label>
+                    <input type="text" id="stockSearch" placeholder="종목코드 입력 (현대차: 005380, 삼성전자: 005930)" 
+                           class="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none">
+                </div>
+                <button onclick="updateStock()" class="w-full md:w-32 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition mt-5">
+                    분석하기
+                </button>
+            </div>
+            <p class="text-xs text-gray-400 mt-2">* 실제 데이터를 위해 '005380' 같은 숫자를 입력하세요.</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-gray-100">
+                <div class="flex justify-between items-start mb-6">
+                    <div>
+                        <h2 id="displayStockName" class="text-2xl font-bold text-gray-800">대기 중...</h2>
+                        <p id="displayPrice" class="text-4xl font-extrabold tracking-tight mt-2">- 원</p>
+                    </div>
+                    <div class="text-right">
+                        <div id="signalLight" class="inline-block px-4 py-1 rounded-full text-xs font-black mb-2 bg-gray-100 text-gray-400">분석 전</div>
+                        <div class="flex items-baseline justify-end gap-1">
+                            <span id="valueScore" class="text-5xl font-black text-indigo-600">0</span>
+                            <span class="text-gray-400 font-bold">점</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="h-[350px]">
+                    <canvas id="mainChart"></canvas>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                    <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2">📊 실제 퀀트 데이터</h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">현재 PBR</span>
+                            <span id="statPbr" class="font-bold text-gray-800">- 배</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-500">ROE (자기자본이익률)</span>
+                            <span id="statRoe" class="font-bold text-green-600">- %</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-indigo-50 p-6 rounded-3xl border border-indigo-100">
+                    <h3 class="font-bold text-indigo-900 mb-3 text-sm">리코더의 최종 전략</h3>
+                    <p id="recorderGuide" class="text-sm text-indigo-700 leading-relaxed">
+                        종목 코드를 입력하고 분석하기를 눌러주세요.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let myChart;
+
+async function updateStock() {
+    const queryInput = document.getElementById('stockSearch');
+    const query = queryInput.value.trim(); // 공백 제거
+    
+    if (!query) {
+        alert("종목명(예: 삼성전자)을 입력해주세요!");
+        return;
+    }
+
+    const guide = document.getElementById('recorderGuide');
+    guide.innerText = "데이터 분석 중입니다...";
+
+    try {
+        // [중요] 한글 검색어를 안전하게 인코딩하여 백엔드로 전송
+        const url = `http://localhost:8000/api/stock/${encodeURIComponent(query)}`;
+        console.log("요청 보내는 주소:", url);
+
+        const response = await fetch(url);
+        
+        // 서버 응답이 성공(200)이 아닐 경우
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || "서버 응답 에러");
+        }
+        
+        const data = await response.json();
+        console.log("받은 데이터:", data);
+
+        // 만약 백엔드에서 에러 메시지를 담아 보냈다면
+        if (data.detail || data.error) {
+            alert(data.detail || data.error);
+            guide.innerText = "종목을 찾을 수 없습니다.";
+            return;
+        }
+
+        // --- UI 데이터 업데이트 시작 ---
+        document.getElementById('displayStockName').innerText = data.name;
+        document.getElementById('displayPrice').innerText = `${data.price}원`;
+        document.getElementById('valueScore').innerText = data.score;
+        document.getElementById('statPbr').innerText = `${data.pbr}배`;
+        document.getElementById('statRoe').innerText = `${data.roe}%`;
+
+        // 차트 업데이트 (기존에 작성한 updateChart 함수 호출)
+        if (window.updateChart) {
+            window.updateChart(data.trend);
+        }
+
+        // 점수별 가이드 텍스트 변경
+        updateGuideByScore(data.score, data.name);
+
+    } catch (error) {
+        console.error("상세 에러 내용:", error);
+        alert("분석 실패: " + error.message);
+        guide.innerText = "정확한 종목명을 입력해주세요.";
+    }
+}
+
+// 점수에 따라 리코더의 조언을 바꿔주는 함수
+function updateGuideByScore(score, name) {
+    const light = document.getElementById('signalLight');
+    const guide = document.getElementById('recorderGuide');
+    
+    if (score >= 80) {
+        light.innerText = "적극 매수";
+        light.className = "inline-block px-4 py-1 rounded-full text-xs font-black mb-2 bg-green-100 text-green-700";
+        guide.innerText = `현재 ${name}는 밸류업 매력이 매우 높습니다. 저평가 구간이 확실하니 공격적인 비중 확대를 고려하세요.`;
+    } else if (score >= 50) {
+        light.innerText = "보유/관망";
+        light.className = "inline-block px-4 py-1 rounded-full text-xs font-black mb-2 bg-yellow-100 text-yellow-700";
+        guide.innerText = `${name}는 적정 가치 구간에 진입했습니다. 추가적인 이익 성장을 확인하며 분할 매수로 대응하세요.`;
+    } else {
+        light.innerText = "주의/고평가";
+        light.className = "inline-block px-4 py-1 rounded-full text-xs font-black mb-2 bg-red-100 text-red-700";
+        guide.innerText = `현재 가치 대비 고평가 상태입니다. 무리한 진입보다는 조정을 기다리거나 다른 저평가주를 찾아보세요.`;
+    }
+}
+
+        function updateChart(trendData) {
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            if (myChart) myChart.destroy();
+
+            // 데이터 개수에 맞춰 레이블 생성 (1, 2, 3...)
+            const labels = trendData.map((_, i) => i + 1);
+
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '최근 주가 추이',
+                        data: trendData,
+                        borderColor: '#4f46e5',
+                        borderWidth: 3,
+                        tension: 0.3,
+                        pointRadius: 0,
+                        fill: true,
+                        backgroundColor: 'rgba(79, 70, 229, 0.05)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { 
+                        x: { display: false },
+                        y: { grid: { color: '#f1f5f9' } }
+                    }
+                }
+            });
+        }
+
+        window.onload = () => {
+            document.getElementById('stockSearch').value = "005380";
+            updateStock();
+        };
+    </script>
+</body>
+</html>
