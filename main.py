@@ -6,6 +6,29 @@ from fastapi.middleware.cors import CORSMiddleware
 import yfinance as yf
 import time
 
+# [보안 우회] 맥 환경 필수
+os.environ['PYTHONHTTPSVERIFY'] = '0'
+ssl._create_default_https_context = ssl._create_unverified_context
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# [데이터 로드]
+def load_stock_map():
+    try:
+        df = pd.read_csv('stocks.csv', dtype={'code': str})
+        return df.set_index('name')['code'].to_dict()
+    except:
+        return {}
+
+STOCK_MAP = load_stock_map()
+
 # 전역 변수로 캐시 저장소 만들기
 stock_cache = {}
 
@@ -39,30 +62,7 @@ def get_stock_data(query: str):
         if query in stock_cache:
             return stock_cache[query]['data']
         return {"detail": "현재 데이터 연결이 원활하지 않습니다."}
-
-# [보안 우회] 맥 환경 필수
-os.environ['PYTHONHTTPSVERIFY'] = '0'
-ssl._create_default_https_context = ssl._create_unverified_context
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# [데이터 로드]
-def load_stock_map():
-    try:
-        df = pd.read_csv('stocks.csv', dtype={'code': str})
-        return df.set_index('name')['code'].to_dict()
-    except:
-        return {}
-
-STOCK_MAP = load_stock_map()
-
+    
 @app.get("/api/stock/{query}")
 def get_stock_data(query: str):
     try:
