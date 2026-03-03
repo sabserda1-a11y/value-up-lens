@@ -4,6 +4,41 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import yfinance as yf
+import time
+
+# 전역 변수로 캐시 저장소 만들기
+stock_cache = {}
+
+@app.get("/api/stock/{query}")
+def get_stock_data(query: str):
+    now = time.time()
+    
+    # 1. 캐시 확인 (10분 이내에 검색된 적이 있다면?)
+    if query in stock_cache:
+        cached_item = stock_cache[query]
+        if now - cached_item['timestamp'] < 600: # 600초 = 10분
+            print(f"📦 캐시에서 가져옴: {query}")
+            return cached_item['data']
+
+    try:
+        # (기존 yfinance 호출 로직...)
+        symbol = STOCK_MAP.get(query, query).zfill(6)
+        ticker = yf.Ticker(f"{symbol}.KS")
+        
+        # 데이터 수집 (생략) ...
+        result = { "name": query, "price": "..." } # 실제 데이터 조립
+
+        # 2. 새로운 데이터를 캐시에 저장
+        stock_cache[query] = {
+            'data': result,
+            'timestamp': now
+        }
+        return result
+    except Exception as e:
+        # 만약 야후가 차단했다면 캐시에 있는 옛날 데이터라도 보여주기
+        if query in stock_cache:
+            return stock_cache[query]['data']
+        return {"detail": "현재 데이터 연결이 원활하지 않습니다."}
 
 # [보안 우회] 맥 환경 필수
 os.environ['PYTHONHTTPSVERIFY'] = '0'
