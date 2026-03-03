@@ -5,14 +5,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import requests # Twelve Data 호출용
 
 app = FastAPI()
-@app.get("/")
-def read_root():
-    return {
-        "status": "online",
-        "message": "Twelve Data 엔진이 정상적으로 가동 중입니다!",
-        "endpoint": "/api/stock/{종목명}"
-    }
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -22,7 +14,7 @@ app.add_middleware(
 )
 
 # [발급받은 키를 여기에 넣으세요]
-TWELVE_DATA_API_KEY = "65a8d39e8d3945bf82339e9ef483f211"
+TWELVE_DATA_API_KEY = "여기에_복사한_API_KEY를_넣으세요"
 
 # [데이터 로드]
 def load_stock_map():
@@ -70,13 +62,15 @@ def get_stock_data(query: str):
         # 무료 플랜은 요청 횟수 제한이 있으므로 주가 위주로 먼저 구현합니다.
         
         return {
-            "name": name,
-            "price": f"{int(current_price):,}",
-            "pbr": pbr,
-            "roe": roe,
-            "score": score,
-            "trend": [int(current_price * 0.95), int(current_price * 0.98), int(current_price)] # 샘플 트렌드
-        }
+    "name": name,
+    "price": f"{int(current_price):,}",
+    "pbr": pbr,
+    "roe": roe,
+    "score": score,
+    "trend": [int(current_price * 0.98), int(current_price * 0.99), int(current_price)] # 최소한의 리스트라도 보냅니다.
+}
 
     except Exception as e:
         return {"detail": str(e)}
+    
+# 실행: uvicorn main:app --reload
