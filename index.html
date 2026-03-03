@@ -89,7 +89,7 @@ async function updateStock() {
 
     try {
         // [중요] 한글 검색어를 안전하게 인코딩하여 백엔드로 전송
-        const url = `http://localhost:8000/api/stock/${encodeURIComponent(query)}`;
+        const url = `https://value-up-lens.onrender.com/api/stock/${encodeURIComponent(query)}`;
         console.log("요청 보내는 주소:", url);
 
         const response = await fetch(url);
