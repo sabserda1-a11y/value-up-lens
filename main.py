@@ -5,6 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 import requests # Twelve Data 호출용
 
 app = FastAPI()
+@app.get("/")
+def read_root():
+    return {
+        "status": "online",
+        "message": "Twelve Data 엔진이 정상적으로 가동 중입니다!",
+        "endpoint": "/api/stock/{종목명}"
+    }
+
 
 app.add_middleware(
     CORSMiddleware,
