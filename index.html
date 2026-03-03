@@ -85,7 +85,51 @@
     <script>
         let myChart;
 
+// 메시지 순차 변경 함수
+function rotateMessages() {
+    const messages = [
+        "분석 엔진을 가동하는 중입니다...",
+        "실시간 재무 데이터를 수집하고 있습니다.",
+        "퀀트 알고리즘으로 적정 가치를 계산 중입니다.",
+        "거의 다 되었습니다! 차트를 생성하고 있습니다."
+    ];
+    let i = 0;
+    return setInterval(() => {
+        document.getElementById('loadingMessage').innerText = messages[i % messages.length];
+        i++;
+    }, 3000); // 3초마다 메시지 변경
+}
+
 async function updateStock() {
+    const query = document.getElementById('stockSearch').value.trim();
+    if (!query) return;
+
+    // 1. 로딩 화면 켜기
+    const overlay = document.getElementById('loadingOverlay');
+    overlay.classList.remove('hidden');
+    overlay.classList.add('flex');
+    const msgInterval = rotateMessages();
+
+    try {
+        const response = await fetch(`https://내-서버-주소.onrender.com/api/stock/${encodeURIComponent(query)}`);
+        const data = await response.json();
+
+        if (data.detail) {
+            alert(data.detail);
+        } else {
+            // UI 업데이트 로직 (기존과 동일)
+            updateUI(data); 
+        }
+
+    } catch (error) {
+        alert("데이터를 가져오는 데 실패했습니다.");
+    } finally {
+        // 2. 로딩 화면 끄기 (성공하든 실패하든)
+        clearInterval(msgInterval);
+        overlay.classList.remove('flex');
+        overlay.classList.add('hidden');
+    }
+}
     const queryInput = document.getElementById('stockSearch');
     const query = queryInput.value.trim(); // 공백 제거
     
