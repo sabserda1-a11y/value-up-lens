@@ -14,7 +14,7 @@ app.add_middleware(
 )
 
 # [발급받은 키를 여기에 넣으세요]
-TWELVE_DATA_API_KEY = "여기에_복사한_API_KEY를_넣으세요"
+TWELVE_DATA_API_KEY = "65a8d39e8d3945bf82339e9ef483f211"
 
 # [데이터 로드]
 def load_stock_map():
