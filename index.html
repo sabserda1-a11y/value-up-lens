@@ -169,7 +169,6 @@
                 document.getElementById('displayPBR').innerText = data.pbr ? data.pbr + "배" : "N/A";
                 document.getElementById('displayROE').innerText = data.roe ? data.roe + "%" : "N/A";
                 document.getElementById('displayScore').innerText = (data.score || 50) + "점";
-                document.getElementById('recorderGuide').innerText = "데이터 분석 완료!";
 
                 // 차트 업데이트
                 updateChart(data.trend, data.dates, data.currency);
