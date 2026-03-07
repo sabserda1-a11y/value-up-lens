@@ -97,12 +97,12 @@ def get_stock_data(query: str):
             }
 
        # ==========================================
-        # 🇺🇸 3. 미국 주식 로직 (야후 파이낸스 - 리얼 퀀트 데이터)
+        # 🇺🇸 3. 미국 주식 로직 (야후 숨겨진 API 직접 호출)
         # ==========================================
         else:
             ticker = yf.Ticker(target_symbol)
             
-            # 1단계: 가장 안정적인 '차트'와 '현재가'부터 확보합니다.
+            # 1. 차트와 현재가 (이건 yfinance가 아주 잘 가져옵니다)
             hist = ticker.history(period="6mo")
             if hist.empty:
                 return {"detail": f"미국 주식 '{target_symbol}' 데이터를 찾을 수 없습니다."}
@@ -114,38 +114,47 @@ def get_stock_data(query: str):
                 date_list.append(date.strftime('%Y-%m-%d'))
                 trend_list.append(round(row['Close'], 2))
 
-            # 2단계: 핵심 기획! 진짜 퀀트 데이터(PBR, ROE) 추출 시도
+            # 2. 진짜 퀀트 데이터 추출 (야후 비밀 API 직접 타격!)
             name = target_symbol
             pbr = 0.0
             roe = 0.0
             
             try:
-                info = ticker.info
-                name = info.get('shortName', target_symbol)
+                # 브라우저인 척 위장
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                }
+                # 야후의 숨겨진 재무 데이터 전용 주소
+                yahoo_api_url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{target_symbol}?modules=defaultKeyStatistics,financialData,price"
                 
-                # 야후에서 실제 PBR과 ROE 데이터를 빼옵니다.
-                raw_pbr = info.get('priceToBook')
-                raw_roe = info.get('returnOnEquity')
+                res = requests.get(yahoo_api_url, headers=headers)
+                data = res.json()
                 
-                if raw_pbr is not None:
-                    pbr = round(float(raw_pbr), 2)
-                if raw_roe is not None:
-                    roe = round(float(raw_roe) * 100, 2)
+                result = data['quoteSummary']['result'][0]
+                
+                # 종목명 가져오기
+                if 'price' in result and 'shortName' in result['price']:
+                    name = result['price']['shortName']
+                
+                # PBR 가져오기
+                if 'defaultKeyStatistics' in result and 'priceToBook' in result['defaultKeyStatistics']:
+                    pbr = round(float(result['defaultKeyStatistics']['priceToBook']['raw']), 2)
+                
+                # ROE 가져오기
+                if 'financialData' in result and 'returnOnEquity' in result['financialData']:
+                    roe = round(float(result['financialData']['returnOnEquity']['raw']) * 100, 2)
                     
             except Exception as e:
-                # 야후 서버가 일시적으로 재무 데이터를 안 줄 때를 대비한 방어막
-                print(f"🔥 야후 퀀트 데이터 로드 실패: {e}")
+                print(f"🔥 야후 퀀트 데이터 직접 호출 실패: {e}")
                 
-            # 3단계: 실제 데이터를 기반으로 퀀트 스코어 계산
-            score = 50 # 기본 점수
+            # 3. 실제 데이터를 기반으로 퀀트 스코어 계산
+            score = 50 
             
             if pbr > 0:
-                # PBR이 1.5 이하면 저평가(가산점), 3.0 이상이면 고평가(감점)
                 if pbr <= 1.5: score += 20
                 elif pbr >= 3.0: score -= 15
                 
             if roe > 0:
-                # ROE가 15% 이상이면 우량 기업(가산점)
                 if roe >= 15: score += 20
                 elif roe < 0: score -= 15
                 
