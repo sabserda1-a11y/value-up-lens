@@ -115,8 +115,8 @@
             }, 3000);
         }
 
-        // 메인 분석 실행 함수
-async function updateStock() {
+    // 메인 분석 실행 함수
+    async function updateStock() {
     const queryInput = document.getElementById('stockSearch');
     const btn = document.getElementById('searchBtn');
     const query = queryInput.value.trim();
@@ -134,8 +134,6 @@ async function updateStock() {
     const newUrl = window.location.pathname + "?code=" + encodeURIComponent(query);
     window.history.pushState({ path: newUrl }, '', newUrl);
 
-    // ... (이 아래로는 기존 로직인 로딩 화면 켜기, fetch 등이 그대로 이어집니다) ...
-    const overlay = document.getElementById('loadingOverlay');
 
             // 2. 로딩 화면 시작
             const overlay = document.getElementById('loadingOverlay');
