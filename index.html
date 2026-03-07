@@ -160,7 +160,9 @@
 
                 // 3. UI 업데이트
                 document.getElementById('displayStockName').innerText = data.name;
-                document.getElementById('displayPrice').innerText = `${data.price}원`;
+                // 🌟 [수정 후] 백엔드가 보내주는 '원' 또는 '달러'를 동적으로 붙여줍니다!
+                const currency = data.currency || "원";
+                document.getElementById('displayPrice').innerText = (data.price || "0") + " " + currency;
                 document.getElementById('valueScore').innerText = data.score;
                 document.getElementById('statPbr').innerText = `${data.pbr}배`;
                 document.getElementById('statRoe').innerText = `${data.roe}%`;
@@ -249,7 +251,7 @@ function updateChart(trendData, dateData) {
                     callbacks: {
                         label: function(context) {
                             // 가격 뒤에 '원'을 붙이고 콤마를 찍어줍니다.
-                            return context.parsed.y.toLocaleString() + '원';
+                            return context.parsed.y.toLocaleString() + ' ' + currency;
                         }
                     }
                 }
