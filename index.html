@@ -251,7 +251,7 @@ function updateChart(trendData, dateData) {
                     callbacks: {
                         label: function(context) {
                             // 가격 뒤에 '원'을 붙이고 콤마를 찍어줍니다.
-                            return context.parsed.y.toLocaleString() + ' ' + currency;
+                            return context.parsed.y.toLocaleString() + '원';
                         }
                     }
                 }
