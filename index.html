@@ -159,26 +159,26 @@
                 const data = await response.json();
 
                 // 3. UI 업데이트
-                // --- UI 데이터 업데이트 (안전제일 버전) ---
-    const currency = data.currency || "원";
+                // --- UI 데이터 업데이트 (HTML ID 완벽 매칭 버전) ---
+                const currency = data.currency || "원";
 
-    // 1. 이름과 가격 (이건 무조건 있어야 하니 ID가 맞는지 꼭 확인하세요!)
-    const nameEl = document.getElementById('displayName');
-    if (nameEl) nameEl.innerText = data.name || "알 수 없는 종목";
+                // 1. 종목명과 가격
+                const nameEl = document.getElementById('displayStockName');
+                if (nameEl) nameEl.innerText = data.name || "알 수 없는 종목";
 
-    const priceEl = document.getElementById('displayPrice');
-    if (priceEl) priceEl.innerText = (data.price || "0") + " " + currency;
+                const priceEl = document.getElementById('displayPrice');
+                if (priceEl) priceEl.innerText = (data.price || "0") + " " + currency;
 
-    // 2. PBR, ROE, Score (자신의 HTML ID에 맞게 괄호 안의 이름을 고쳐 쓰세요!)
-    // 만약 HTML ID가 'pbrValue'라면 document.getElementById('pbrValue') 로 수정!
-    const pbrEl = document.getElementById('displayPBR'); 
-    if (pbrEl) pbrEl.innerText = data.pbr ? data.pbr + "배" : "N/A";
+                // 2. 퀀트 데이터 (PBR, ROE)
+                const pbrEl = document.getElementById('statPbr'); 
+                if (pbrEl) pbrEl.innerText = data.pbr ? data.pbr + " 배" : "N/A";
 
-    const roeEl = document.getElementById('displayROE');
-    if (roeEl) roeEl.innerText = data.roe ? data.roe + "%" : "N/A";
+                const roeEl = document.getElementById('statRoe');
+                if (roeEl) roeEl.innerText = data.roe ? data.roe + " %" : "N/A";
 
-    const scoreEl = document.getElementById('displayScore');
-    if (scoreEl) scoreEl.innerText = (data.score || 50) + "점";
+                // 3. 가치 평가 점수
+                const scoreEl = document.getElementById('valueScore');
+                if (scoreEl) scoreEl.innerText = data.score || 50; // '점'은 HTML 뼈대에 이미 있어서 숫자만 넣습니다.
 
                 // 차트 업데이트
                 updateChart(data.trend, data.dates, data.currency);
