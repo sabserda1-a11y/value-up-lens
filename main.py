@@ -1,6 +1,8 @@
 import os
+import re
 import pandas as pd
 import requests
+import yfinance as yf
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -26,120 +28,111 @@ STOCK_MAP = load_stock_map()
 @app.get("/")
 @app.head("/")
 def read_root():
-    return {"status": "alive", "message": "Value-Up Lens API (Naver Finance + Real Quant) is running."}
+    return {"status": "alive", "message": "Global Hybrid Engine (Naver + Yahoo) is running."}
 
 @app.get("/api/stock/{query}")
 def get_stock_data(query: str):
     try:
         query = query.strip()
         
-        # 1. 하이브리드 검색 (이름 or 코드)
+        # 🌟 1. 스마트 라우팅 (한국 vs 미국 구분)
+        is_korean = True
+        target_symbol = ""
+
         if query.isdigit():
-            symbol = query
+            # 숫자면 한국 주식
+            target_symbol = query.zfill(6)
+        elif query in STOCK_MAP:
+            # 장부에 있으면 한국 주식 (SK하이닉스 통과!)
+            target_symbol = STOCK_MAP[query].zfill(6)
+        elif re.match(r'^[A-Za-z]+$', query):
+            # 오직 순수 영어로만 되어 있다면 미국 주식! (AAPL, TSLA 등)
+            is_korean = False
+            target_symbol = query.upper()
         else:
-            symbol = STOCK_MAP.get(query)
-
-        if not symbol:
             return {"detail": f"'{query}' 종목을 찾을 수 없습니다."}
-        
-        symbol = str(symbol).strip().zfill(6)
 
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-
-        # 2. 실시간 주가 및 이름 가져오기
-        realtime_url = f"https://polling.finance.naver.com/api/realtime?query=SERVICE_ITEM:{symbol}"
-        realtime_res = requests.get(realtime_url, headers=headers).json()
-        
-        try:
-            item_data = realtime_res['result']['areas'][0]['datas'][0]
+        # ==========================================
+        # 🇰🇷 2. 한국 주식 로직 (네이버 금융)
+        # ==========================================
+        if is_korean:
+            headers = {"User-Agent": "Mozilla/5.0"}
+            symbol = target_symbol
+            
+            # 실시간 주가
+            rt_url = f"https://polling.finance.naver.com/api/realtime?query=SERVICE_ITEM:{symbol}"
+            rt_res = requests.get(rt_url, headers=headers).json()
+            item_data = rt_res['result']['areas'][0]['datas'][0]
             name = item_data['nm']
             current_price = int(str(item_data['nv']).replace(',', ''))
-        except:
-            return {"detail": "실시간 데이터를 가져오는 데 실패했습니다."}
-
-        # 3. 120일 차트 데이터 가져오기
-        try:
-            history_url = f"https://fchart.stock.naver.com/sise.nhn?symbol={symbol}&timeframe=day&count=120&requestType=0"
-            history_res = requests.get(history_url, headers=headers).text
             
-            trend_list = []
-            date_list = []
-            
-            for line in history_res.split('\n'):
+            # 120일 차트
+            hist_url = f"https://fchart.stock.naver.com/sise.nhn?symbol={symbol}&timeframe=day&count=120&requestType=0"
+            hist_res = requests.get(hist_url, headers=headers).text
+            trend_list, date_list = [], []
+            for line in hist_res.split('\n'):
                 if '<item data=' in line:
                     parts = line.split('"')[1].split('|')
-                    raw_date = parts[0]
-                    formatted_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}" 
-                    
-                    date_list.append(formatted_date)
+                    date_list.append(f"{parts[0][:4]}-{parts[0][4:6]}-{parts[0][6:]}")
                     trend_list.append(int(parts[4]))
-            
-            if not trend_list:
-                trend_list = [current_price] * 5
-                date_list = ["데이터 없음"] * 5
-        except:
-            trend_list = [current_price] * 5
-            date_list = ["데이터 없음"] * 5 
-
-        # 4. [신규 기능] 진짜 퀀트 데이터 스크래핑 및 ROE 계산
-        pbr = 0.0
-        per = 0.0
-        roe = 0.0
-        
-        try:
-            main_url = f"https://finance.naver.com/item/main.naver?code={symbol}"
-            main_html = requests.get(main_url, headers=headers).text
-            
-            # id="_pbr" 부분을 찾아서 숫자만 빼오기
+                    
+            # 퀀트 (PBR, PER)
+            pbr, per, roe = 0.0, 0.0, 0.0
+            main_html = requests.get(f"https://finance.naver.com/item/main.naver?code={symbol}", headers=headers).text
             if 'id="_pbr">' in main_html:
-                pbr_str = main_html.split('id="_pbr">')[1].split('</')[0].strip()
-                pbr = float(pbr_str.replace(',', ''))
-            
-            # id="_per" 부분을 찾아서 숫자만 빼오기
+                pbr = float(main_html.split('id="_pbr">')[1].split('</')[0].strip().replace(',', ''))
             if 'id="_per">' in main_html:
-                per_str = main_html.split('id="_per">')[1].split('</')[0].strip()
-                per = float(per_str.replace(',', ''))
-                
-            # ROE = PBR / PER * 100 공식 적용!
+                per = float(main_html.split('id="_per">')[1].split('</')[0].strip().replace(',', ''))
             if per > 0 and pbr > 0:
                 roe = round((pbr / per) * 100, 2)
+
+            score = min(max(int(50 + (25 if pbr <= 0.8 else -15 if pbr > 2 else 0) + (20 if roe >= 15 else -10 if roe < 0 else 0)), 10), 98)
+
+            return {
+                "name": name,
+                "price": f"{current_price:,}",
+                "currency": "원", # 통화 단위 추가
+                "pbr": pbr, "roe": roe, "score": score,
+                "trend": trend_list, "dates": date_list
+            }
+
+        # ==========================================
+        # 🇺🇸 3. 미국 주식 로직 (야후 파이낸스)
+        # ==========================================
+        else:
+            ticker = yf.Ticker(target_symbol)
+            info = ticker.info
+            
+            if 'currentPrice' not in info and 'regularMarketPrice' not in info:
+                return {"detail": f"미국 주식 '{target_symbol}' 데이터를 찾을 수 없습니다."}
                 
-        except Exception as e:
-            print(f"🔥 퀀트 파싱 에러: {e}")
-
-        # 5. [신규 기능] 진짜 데이터를 기반으로 한 퀀트 스코어 (100점 만점)
-        score = 50 # 기본 점수
-        
-        # PBR 가치평가 (낮을수록 저평가)
-        if 0 < pbr <= 0.8:
-            score += 25
-        elif 0.8 < pbr <= 1.2:
-            score += 15
-        elif pbr > 2.0:
-            score -= 15
+            current_price = info.get('currentPrice', info.get('regularMarketPrice'))
+            name = info.get('shortName', target_symbol)
             
-        # ROE 수익성 평가 (높을수록 우량기업)
-        if roe >= 15:
-            score += 20
-        elif 8 <= roe < 15:
-            score += 10
-        elif roe < 0:
-            score -= 10
+            # 미국 주식은 야후가 PBR, ROE를 바로 줍니다!
+            pbr = round(info.get('priceToBook', 0), 2)
+            roe = round(info.get('returnOnEquity', 0) * 100, 2) if info.get('returnOnEquity') else 0.0
             
-        score = min(max(int(score), 10), 98) # 점수가 10~98점 사이를 안 벗어나게 보정
+            # 차트 데이터 (최근 6개월)
+            hist = ticker.history(period="6mo")
+            trend_list, date_list = [], []
+            if not hist.empty:
+                for date, row in hist.iterrows():
+                    date_list.append(date.strftime('%Y-%m-%d'))
+                    trend_list.append(round(row['Close'], 2)) # 달러는 소수점 유지
+            else:
+                trend_list = [current_price] * 5
+                date_list = ["데이터 없음"] * 5
 
-        # 6. 프론트엔드로 최종 발송
-        return {
-            "name": name,
-            "price": f"{current_price:,}",
-            "pbr": pbr,    
-            "roe": roe,    
-            "score": score,    
-            "trend": trend_list,
-            "dates": date_list
-        }
+            score = min(max(int(50 + (15 if 0 < pbr <= 2.0 else 0) + (20 if roe >= 15 else 0)), 10), 98)
+
+            return {
+                "name": name,
+                "price": f"{current_price:,}", # 소수점 포함 달러 표기
+                "currency": "달러", # 미국 주식은 달러!
+                "pbr": pbr, "roe": roe, "score": score,
+                "trend": trend_list, "dates": date_list
+            }
 
     except Exception as e:
         return {"detail": f"서버 에러: {str(e)}"}
