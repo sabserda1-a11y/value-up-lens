@@ -163,7 +163,7 @@
                 document.getElementById('recorderGuide').innerText = "데이터 분석 완료!";
 
                 // 차트 업데이트
-                updateChart(data.trend);
+                updateChart(data.trend, data.dates);
                 updateGuideByScore(data.score, data.name);
 
             } catch (error) {
@@ -202,27 +202,27 @@
             }
         }
 
-        function updateChart(trendData) {
+    // 인자에 dateData를 추가로 받습니다.
+function updateChart(trendData, dateData) {
     const ctx = document.getElementById('mainChart').getContext('2d');
     if (myChart) myChart.destroy();
 
-    // [방어 로직] trendData가 없거나 비어있으면 기본값 [0]을 넣어 에러 방지
-    const safeData = (trendData && trendData.length > 0) ? trendData : [0, 0, 0, 0, 0];
-    
-    // 이제 safeData를 사용하므로 'map' 에러가 나지 않습니다.
-    const labels = safeData.map((_, i) => i + 1);
+    const safeTrend = (trendData && trendData.length > 0) ? trendData : [0, 0, 0, 0, 0];
+    // 날짜 데이터가 없으면 임시 번호 표기
+    const safeDates = (dateData && dateData.length === safeTrend.length) ? dateData : safeTrend.map((_, i) => i + 1);
 
     myChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: labels,
+            labels: safeDates, // 🌟 x축 데이터에 '날짜'가 들어갑니다!
             datasets: [{
-                label: '최근 주가 추이',
-                data: safeData, // 안전한 데이터를 사용합니다.
+                label: '종가',
+                data: safeTrend,
                 borderColor: '#4f46e5',
                 borderWidth: 3,
-                tension: 0.3,
-                pointRadius: 0,
+                tension: 0.3, // 곡선의 부드러움 정도
+                pointRadius: 0, // 평소에는 점을 숨겨서 깔끔하게!
+                pointHoverRadius: 6, // 🌟 마우스를 올렸을 때만 점이 커지도록!
                 fill: true,
                 backgroundColor: 'rgba(79, 70, 229, 0.05)'
             }]
@@ -230,15 +230,33 @@
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: { legend: { display: false } },
+            interaction: {
+                mode: 'index',
+                intersect: false, // 🌟 선에 정확히 안 닿고 근처만 가도 툴팁이 뜸 (모바일 최적화 UX)
+            },
+            plugins: { 
+                legend: { display: false },
+                tooltip: { // 🌟 툴팁 디자인 커스텀
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)', // 고급스러운 다크 네이비 배경
+                    titleFont: { size: 13, family: 'Pretendard' }, // 날짜 폰트
+                    bodyFont: { size: 15, weight: 'bold', family: 'Pretendard' }, // 가격 폰트
+                    padding: 12,
+                    displayColors: false, // 쓸데없는 네모 박스 숨김
+                    callbacks: {
+                        label: function(context) {
+                            // 가격 뒤에 '원'을 붙이고 콤마를 찍어줍니다.
+                            return context.parsed.y.toLocaleString() + '원';
+                        }
+                    }
+                }
+            },
             scales: { 
-                x: { display: false },
+                x: { display: false }, // x축 라벨 자체는 숨겨서 차트를 깔끔하게 유지
                 y: { grid: { color: '#f1f5f9' } }
             }
         }
     });
 }
-
         // 초기 화면 설정
         window.onload = () => {
             document.getElementById('stockSearch').value = "005380";
