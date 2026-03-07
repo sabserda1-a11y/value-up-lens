@@ -96,42 +96,70 @@ def get_stock_data(query: str):
                 "trend": trend_list, "dates": date_list
             }
 
-        # ==========================================
-        # 🇺🇸 3. 미국 주식 로직 (야후 파이낸스)
+       # ==========================================
+        # 🇺🇸 3. 미국 주식 로직 (야후 파이낸스 - 리얼 퀀트 데이터)
         # ==========================================
         else:
             ticker = yf.Ticker(target_symbol)
-            info = ticker.info
             
-            if 'currentPrice' not in info and 'regularMarketPrice' not in info:
-                return {"detail": f"미국 주식 '{target_symbol}' 데이터를 찾을 수 없습니다."}
-                
-            current_price = info.get('currentPrice', info.get('regularMarketPrice'))
-            name = info.get('shortName', target_symbol)
-            
-            # 미국 주식은 야후가 PBR, ROE를 바로 줍니다!
-            pbr = round(info.get('priceToBook', 0), 2)
-            roe = round(info.get('returnOnEquity', 0) * 100, 2) if info.get('returnOnEquity') else 0.0
-            
-            # 차트 데이터 (최근 6개월)
+            # 1단계: 가장 안정적인 '차트'와 '현재가'부터 확보합니다.
             hist = ticker.history(period="6mo")
+            if hist.empty:
+                return {"detail": f"미국 주식 '{target_symbol}' 데이터를 찾을 수 없습니다."}
+            
+            current_price = round(hist['Close'].iloc[-1], 2)
+            
             trend_list, date_list = [], []
-            if not hist.empty:
-                for date, row in hist.iterrows():
-                    date_list.append(date.strftime('%Y-%m-%d'))
-                    trend_list.append(round(row['Close'], 2)) # 달러는 소수점 유지
-            else:
-                trend_list = [current_price] * 5
-                date_list = ["데이터 없음"] * 5
+            for date, row in hist.iterrows():
+                date_list.append(date.strftime('%Y-%m-%d'))
+                trend_list.append(round(row['Close'], 2))
 
-            score = min(max(int(50 + (15 if 0 < pbr <= 2.0 else 0) + (20 if roe >= 15 else 0)), 10), 98)
+            # 2단계: 핵심 기획! 진짜 퀀트 데이터(PBR, ROE) 추출 시도
+            name = target_symbol
+            pbr = 0.0
+            roe = 0.0
+            
+            try:
+                info = ticker.info
+                name = info.get('shortName', target_symbol)
+                
+                # 야후에서 실제 PBR과 ROE 데이터를 빼옵니다.
+                raw_pbr = info.get('priceToBook')
+                raw_roe = info.get('returnOnEquity')
+                
+                if raw_pbr is not None:
+                    pbr = round(float(raw_pbr), 2)
+                if raw_roe is not None:
+                    roe = round(float(raw_roe) * 100, 2)
+                    
+            except Exception as e:
+                # 야후 서버가 일시적으로 재무 데이터를 안 줄 때를 대비한 방어막
+                print(f"🔥 야후 퀀트 데이터 로드 실패: {e}")
+                
+            # 3단계: 실제 데이터를 기반으로 퀀트 스코어 계산
+            score = 50 # 기본 점수
+            
+            if pbr > 0:
+                # PBR이 1.5 이하면 저평가(가산점), 3.0 이상이면 고평가(감점)
+                if pbr <= 1.5: score += 20
+                elif pbr >= 3.0: score -= 15
+                
+            if roe > 0:
+                # ROE가 15% 이상이면 우량 기업(가산점)
+                if roe >= 15: score += 20
+                elif roe < 0: score -= 15
+                
+            score = min(max(int(score), 10), 98)
 
             return {
                 "name": name,
-                "price": f"{current_price:,}", # 소수점 포함 달러 표기
-                "currency": "달러", # 미국 주식은 달러!
-                "pbr": pbr, "roe": roe, "score": score,
-                "trend": trend_list, "dates": date_list
+                "price": f"{current_price:,}",
+                "currency": "달러",
+                "pbr": pbr, 
+                "roe": roe, 
+                "score": score,
+                "trend": trend_list, 
+                "dates": date_list
             }
 
     except Exception as e:
