@@ -116,20 +116,26 @@
         }
 
         // 메인 분석 실행 함수
-        async function updateStock() {
-            const queryInput = document.getElementById('stockSearch');
-            const btn = document.getElementById('searchBtn');
-            const query = queryInput.value.trim();
+async function updateStock() {
+    const queryInput = document.getElementById('stockSearch');
+    const btn = document.getElementById('searchBtn');
+    const query = queryInput.value.trim();
 
-            // 1. 유효성 검사 및 쿨타임 체크
-            if (!query) {
-                alert("종목코드(예: 005380)를 입력해주세요!");
-                return;
-            }
-            if (isCoolingDown) {
-                alert("분석 엔진이 식는 중입니다. 8초만 기다려주세요! ☕");
-                return;
-            }
+    if (!query) {
+        alert("종목코드(예: 005380)를 입력해주세요!");
+        return;
+    }
+    if (isCoolingDown) {
+        alert("분석 엔진이 식는 중입니다. 8초만 기다려주세요! ☕");
+        return;
+    }
+
+    // 🌟 [신규 추가] 주소창을 '?code=검색어' 형태로 새로고침 없이 변경합니다!
+    const newUrl = window.location.pathname + "?code=" + encodeURIComponent(query);
+    window.history.pushState({ path: newUrl }, '', newUrl);
+
+    // ... (이 아래로는 기존 로직인 로딩 화면 켜기, fetch 등이 그대로 이어집니다) ...
+    const overlay = document.getElementById('loadingOverlay');
 
             // 2. 로딩 화면 시작
             const overlay = document.getElementById('loadingOverlay');
@@ -257,10 +263,22 @@ function updateChart(trendData, dateData) {
         }
     });
 }
-        // 초기 화면 설정
-        window.onload = () => {
-            document.getElementById('stockSearch').value = "005380";
-        };
+// 초기 화면 설정 (주소창 분석 기능 탑재)
+window.onload = () => {
+    // 🌟 1. 현재 주소창에서 '?code=' 뒤에 있는 글자를 가져옵니다.
+    const urlParams = new URLSearchParams(window.location.search);
+    const codeFromUrl = urlParams.get('code');
+
+    // 🌟 2. 주소창에 코드가 있으면 그걸 검색창에 넣고, 없으면 기본값(현대차)을 넣습니다.
+    if (codeFromUrl) {
+        document.getElementById('stockSearch').value = codeFromUrl;
+    } else {
+        document.getElementById('stockSearch').value = "005380";
+    }
+
+    // 🌟 3. 세팅된 값으로 바로 자동 검색을 실행합니다!
+    updateStock();
+};
     </script>
 </body>
 </html>
