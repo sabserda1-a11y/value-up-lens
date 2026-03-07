@@ -53,42 +53,46 @@ def get_stock_data(query: str):
         
         try:
             item_data = realtime_res['result']['areas'][0]['datas'][0]
-            current_price_raw = item_data['nv']  
-            name = item_data['nm']           
-        except:
-            return {"detail": "종목 데이터를 가져오는 데 실패했습니다."}
+            name = item_data['nm']
+            # 주가에 쉼표가 섞여 올 수 있으므로 순수 숫자로 변환 (예: "80,000" -> 80000)
+            current_price = int(str(item_data['nv']).replace(',', ''))
+        except (KeyError, IndexError):
+            return {"detail": "종목 실시간 데이터를 가져오는 데 실패했습니다."}
 
-        # 2. [신규 기능] 최근 120일(약 6개월) 일별 주가 가져오기
+        # 2. [완벽 수정] 120일(약 6개월) 과거 주가 가져오기 (fchart API)
         try:
-            history_url = f"https://m.stock.naver.com/api/stock/{symbol}/price?pageSize=120&page=1"
-            history_res = requests.get(history_url, headers=headers).json()
+            history_url = f"https://fchart.stock.naver.com/sise.nhn?symbol={symbol}&timeframe=day&count=120&requestType=0"
+            history_res = requests.get(history_url, headers=headers).text
             
             trend_list = []
-            # 네이버는 최신 날짜부터 주므로 리스트에 담습니다.
-            for item in history_res:
-                # "80,000" 처럼 쉼표가 섞인 문자열을 순수 숫자로 변환
-                price_str = str(item.get('closePrice', '0')).replace(',', '')
-                trend_list.append(int(price_str))
-                
-            # 차트는 왼쪽(과거)에서 오른쪽(현재)으로 그려져야 하므로 순서를 뒤집습니다.
-            trend_list.reverse()
+            # 응답이 텍스트(XML)로 오기 때문에 한 줄씩 쪼개서 종가(Close)를 찾습니다.
+            for line in history_res.split('\n'):
+                if '<item data=' in line:
+                    # 예: <item data="20260308|72000|73500|71500|73000|15000000" />
+                    data_str = line.split('"')[1]
+                    # | 로 쪼갰을 때 4번째(인덱스 4)가 바로 '종가'입니다.
+                    close_price = int(data_str.split('|')[4]) 
+                    trend_list.append(close_price)
             
-        except Exception as e:
-            print(f"차트 데이터 에러: {e}")
-            # 에러 시 빈 차트 방지용 임시 데이터
-            trend_list = [int(current_price_raw)] * 5 
+            # 혹시나 네이버가 빈 데이터를 줬을 때의 최후의 보루
+            if not trend_list:
+                trend_list = [current_price] * 5
 
-        # 3. 최종 데이터 전송
+        except Exception as e:
+            print(f"🔥 차트 데이터 에러: {e}")
+            trend_list = [current_price] * 5 
+
+        # 3. 프론트엔드로 최종 데이터 조립해서 쏘기!
         return {
             "name": name,
-            "price": f"{current_price_raw:,}",
+            "price": f"{current_price:,}",
             "pbr": 0.85,    
             "roe": 12.5,    
             "score": 85,    
-            "trend": trend_list  # 이제 여기에 120일치 찐 데이터가 들어갑니다!
+            "trend": trend_list  # 이제 여기에 진짜 120일치 굴곡진 데이터가 들어갑니다.
         }
 
     except Exception as e:
-        return {"detail": f"서버 에러: {str(e)}"}
+        return {"detail": f"서버 내부 에러: {str(e)}"}
     
 # 실행: uvicorn main:app --reload
