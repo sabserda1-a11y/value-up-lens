@@ -59,37 +59,46 @@ def get_stock_data(query: str):
         except (KeyError, IndexError):
             return {"detail": "종목 실시간 데이터를 가져오는 데 실패했습니다."}
 
-        # 2. [완벽 수정] 120일(약 6개월) 과거 주가 가져오기 (fchart API)
+# 2. [완벽 수정] 120일(약 6개월) 과거 주가 + 날짜 가져오기
         try:
             history_url = f"https://fchart.stock.naver.com/sise.nhn?symbol={symbol}&timeframe=day&count=120&requestType=0"
             history_res = requests.get(history_url, headers=headers).text
             
             trend_list = []
-            # 응답이 텍스트(XML)로 오기 때문에 한 줄씩 쪼개서 종가(Close)를 찾습니다.
+            date_list = [] # 🌟 날짜를 담을 새로운 상자 준비!
+            
             for line in history_res.split('\n'):
                 if '<item data=' in line:
-                    # 예: <item data="20260308|72000|73500|71500|73000|15000000" />
                     data_str = line.split('"')[1]
-                    # | 로 쪼갰을 때 4번째(인덱스 4)가 바로 '종가'입니다.
-                    close_price = int(data_str.split('|')[4]) 
+                    parts = data_str.split('|')
+                    
+                    # parts[0]은 날짜(20260308), parts[4]는 종가(73000)
+                    raw_date = parts[0]
+                    # 날짜를 예쁘게 '2026-03-08' 형태로 조립
+                    formatted_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}" 
+                    close_price = int(parts[4])
+                    
+                    date_list.append(formatted_date)
                     trend_list.append(close_price)
             
-            # 혹시나 네이버가 빈 데이터를 줬을 때의 최후의 보루
             if not trend_list:
                 trend_list = [current_price] * 5
+                date_list = ["데이터 없음"] * 5
 
         except Exception as e:
             print(f"🔥 차트 데이터 에러: {e}")
-            trend_list = [current_price] * 5 
+            trend_list = [current_price] * 5
+            date_list = ["데이터 없음"] * 5 
 
-        # 3. 프론트엔드로 최종 데이터 조립해서 쏘기!
+        # 3. 프론트엔드로 날짜(dates) 데이터까지 묶어서 전송!
         return {
             "name": name,
             "price": f"{current_price:,}",
             "pbr": 0.85,    
             "roe": 12.5,    
             "score": 85,    
-            "trend": trend_list  # 이제 여기에 진짜 120일치 굴곡진 데이터가 들어갑니다.
+            "trend": trend_list,
+            "dates": date_list   # 🌟 새로 추가된 날짜 데이터 
         }
 
     except Exception as e:
