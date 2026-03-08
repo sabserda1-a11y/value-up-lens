@@ -1,5 +1,6 @@
 import re
 import requests
+import urllib.parse # 🌟 한글을 네이버가 좋아하는 암호(EUC-KR)로 포장하는 도구!
 from datetime import datetime
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -18,7 +19,7 @@ app.add_middleware(
 @app.get("/")
 @app.head("/")
 def read_root():
-    return {"status": "alive", "message": "100% Auto Search (Autocomplete API) Engine is running."}
+    return {"status": "alive", "message": "100% Auto Search (Bypass Engine) is running."}
 
 @app.get("/api/stock/{query}")
 def get_stock_data(query: str):
@@ -28,11 +29,12 @@ def get_stock_data(query: str):
         target_symbol = ""
         
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Referer": "https://finance.naver.com/" # 🌟 나 봇 아니고 진짜 네이버에서 검색하는 거야~ 하고 속이는 신분증
         }
 
         # ==========================================
-        # 🌟 0. 스마트 통합 검색 라우터 (네이버 초고속 자동완성 API)
+        # 🌟 0. 스마트 통합 검색 라우터 (EUC-KR 웹 스크래핑 + API 백업 하이브리드)
         # ==========================================
         if query.isdigit():
             is_korean = True
@@ -41,40 +43,49 @@ def get_stock_data(query: str):
             is_korean = False
             target_symbol = query.upper()
         else:
-            # 한글 검색어 처리 (자동완성 API)
-            search_url = "https://ac.finance.naver.com/ac"
-            params = {
-                'q': query,
-                'q_enc': 'utf-8',
-                'st': '111',
-                'r_format': 'json',
-                't_koreng': '1'
-            }
+            # 1. 네이버 금융 메인 검색창 스크래핑 (서버 차단 100% 우회 및 EUC-KR 인코딩!)
             try:
-                res = requests.get(search_url, params=params, headers=headers)
-                if res.status_code == 200:
-                    data = res.json()
-                    items = data.get('items', [])
-                    
-                    # 자동완성 결과 리스트를 뒤져서 가장 정확한 첫 번째 종목을 찾습니다.
-                    for group in items:
-                        for item in group:
-                            if len(item) >= 3:
-                                market = str(item[2]).upper()
-                                # 한국 주식 (코스피, 코스닥 등)
-                                if market in ['KOSPI', 'KOSDAQ', 'KONEX']:
-                                    is_korean = True
-                                    target_symbol = str(item[1])
-                                    break
-                                # 미국 주식 (나스닥, 뉴욕 등)
-                                elif market in ['NASDAQ', 'NYSE', 'AMEX', 'NYSEAMEX'] or not str(item[1]).isdigit():
-                                    is_korean = False
-                                    target_symbol = str(item[1]).split('.')[0].upper()
-                                    break
-                        if target_symbol:
-                            break
+                # 🌟 핵심 마법: '카카오' -> '%C4%AB%C4%AB%BF%C0' (네이버가 알아듣는 EUC-KR 암호로 변환)
+                euc_kr_query = urllib.parse.quote(query.encode('euc-kr'))
+                search_url = f"https://finance.naver.com/search/searchList.naver?query={euc_kr_query}"
+                res = requests.get(search_url, headers=headers)
+                
+                # 검색이 완벽히 일치해서 종목 페이지로 바로 리다이렉트 된 경우
+                if "item/main.naver?code=" in res.url:
+                    is_korean = True
+                    target_symbol = res.url.split("code=")[-1][:6]
+                else:
+                    # 리스트가 나온 경우 첫 번째 종목 코드 긁어오기
+                    match = re.search(r'/item/main\.naver\?code=(\d{6})', res.text)
+                    if match:
+                        is_korean = True
+                        target_symbol = match.group(1)
             except Exception as e:
-                print(f"검색 API 에러: {e}")
+                print(f"스크래핑 우회 에러: {e}")
+
+            # 2. 미국 주식을 한글로 쳤거나 (예: 애플), 못 찾았을 때의 최후 백업 API
+            if not target_symbol:
+                ac_url = "https://ac.finance.naver.com/ac"
+                params = {'q': query, 'q_enc': 'utf-8', 'st': '111', 'r_format': 'json', 't_koreng': '1'}
+                try:
+                    ac_res = requests.get(ac_url, params=params, headers=headers)
+                    if ac_res.status_code == 200:
+                        items = ac_res.json().get('items', [])
+                        for group in items:
+                            for item in group:
+                                if len(item) >= 3:
+                                    market = str(item[2]).upper()
+                                    if market in ['KOSPI', 'KOSDAQ', 'KONEX']:
+                                        is_korean = True
+                                        target_symbol = str(item[1])
+                                        break
+                                    elif market in ['NASDAQ', 'NYSE', 'AMEX', 'NYSEAMEX'] or not str(item[1]).isdigit():
+                                        is_korean = False
+                                        target_symbol = str(item[1]).split('.')[0].upper()
+                                        break
+                            if target_symbol: break
+                except Exception as e:
+                    print(f"API 백업 검색 에러: {e}")
 
         # 찾지 못했을 때의 방어막
         if not target_symbol:
