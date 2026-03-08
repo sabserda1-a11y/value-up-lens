@@ -16,19 +16,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 🌟 1. 사람들이 자주 쓰는 '줄임말'만 소수로 기억해둡니다. (이외의 수천 개는 웹에서 자동 검색합니다)
+# 🌟 0단계: 가장 많이 찾는 인기 종목은 0초 만에 바로 통과시키기 위한 미니 장부!
 ALIASES = {
     '현대차': '005380', '기아차': '000270', '기아': '000270',
     '삼전': '005930', '삼성전자우': '005935', 'LG엔솔': '373220',
     'SK이노': '096770', '한화에어로': '012450', '카뱅': '323410',
     '엔씨': '036570', '엔씨소프트': '036570', '포스코': '005490', 
-    'POSCO': '005490', '포스코홀딩스': '005490'
+    'POSCO': '005490', '포스코홀딩스': '005490', '에코프로': '086520',
+    '에코프로비엠': '247540', '루닛': '328130', '삼양식품': '003230',
+    '삼성전자': '005930', '카카오': '035720', 'NAVER': '035420', '네이버': '035420'
 }
 
 @app.get("/")
 @app.head("/")
 def read_root():
-    return {"status": "alive", "message": "Ultimate Anti-Block Search Engine is running."}
+    return {"status": "alive", "message": "Ultimate 4-Stage Rocket Search Engine is running."}
 
 @app.get("/api/stock/{query}")
 def get_stock_data(query: str):
@@ -43,65 +45,95 @@ def get_stock_data(query: str):
         }
 
         # ==========================================
-        # 🌟 0. 절대 안 막히는 3단계 무적 검색 라우터
+        # 🌟 절대 안 뻗는 4중 방어망 통합 검색 라우터
         # ==========================================
         if query.isdigit():
             is_korean = True
             target_symbol = query.zfill(6)
         elif query in ALIASES:
-            # 1단계: 애칭 사전에 있으면 0초 만에 바로 통과!
             is_korean = True
             target_symbol = ALIASES[query]
         elif re.match(r'^[A-Za-z0-9]+$', query) and not any("\u3131" <= char <= "\u318E" or "\uAC00" <= char <= "\uD7A3" for char in query):
-            # 순수 영문(AAPL 등)은 미국 주식
             is_korean = False
             target_symbol = query.upper()
         else:
-            # 2단계: 글로벌 야후 파이낸스 검색 (Render 차단 확률 0%)
-            try:
-                yh_url = f"https://query2.finance.yahoo.com/v1/finance/search?q={urllib.parse.quote(query)}"
-                yh_res = requests.get(yh_url, headers=headers)
-                if yh_res.status_code == 200:
-                    quotes = yh_res.json().get('quotes', [])
-                    for q in quotes:
-                        sym = str(q.get('symbol', ''))
-                        if sym.endswith('.KS') or sym.endswith('.KQ'):
-                            is_korean = True
-                            target_symbol = sym.split('.')[0]
-                            break
-                        elif re.match(r'^[A-Z]+$', sym):
-                            is_korean = False
-                            target_symbol = sym
-                            break
-            except: pass
-
-            # 3단계: 최후의 보루! 네이버 금융 웹페이지 직접 긁어오기 (절대 차단당하지 않는 통로)
+            # 🚀 1단 로켓: 네이버 자동완성 API (가장 빠르고 차단 안 됨!)
             if not target_symbol:
                 try:
-                    # '한미반도체'를 네이버가 좋아하는 옛날 암호(EUC-KR)로 변환
+                    ac_url = "https://ac.finance.naver.com/ac"
+                    res = requests.get(ac_url, params={'q': query, 'q_enc': 'utf-8', 'st': '111', 'r_format': 'json', 't_koreng': '1'}, headers=headers)
+                    if res.status_code == 200:
+                        for group in res.json().get('items', []):
+                            for item in group:
+                                if len(item) >= 2:
+                                    code = str(item[1])
+                                    if code.isdigit() and len(code) == 6:
+                                        is_korean = True
+                                        target_symbol = code
+                                        break
+                                    elif re.match(r'^[A-Z0-9\.]+$', code) and not code.isdigit():
+                                        is_korean = False
+                                        target_symbol = code.split('.')[0]
+                                        break
+                            if target_symbol: break
+                except: pass
+
+            # 🚀 2단 로켓: 네이버 모바일 검색 API (1단이 실패했을 때)
+            if not target_symbol:
+                try:
+                    m_url = "https://m.stock.naver.com/api/search/all"
+                    res = requests.get(m_url, params={'keyword': query}, headers=headers)
+                    if res.status_code == 200:
+                        items = res.json().get('searchList', [])
+                        if items:
+                            first = items[0]
+                            if first.get('stockType') == 'worldstock':
+                                is_korean = False
+                                target_symbol = str(first.get('symbolCode', '')).split('.')[0].upper()
+                            else:
+                                is_korean = True
+                                target_symbol = str(first.get('itemCode', ''))
+                except: pass
+
+            # 🚀 3단 로켓: 야후 파이낸스 글로벌 검색 (해외 주식 한글 검색 특화 - 예: 애플)
+            if not target_symbol:
+                try:
+                    yh_url = f"https://query2.finance.yahoo.com/v1/finance/search?q={urllib.parse.quote(query)}"
+                    res = requests.get(yh_url, headers=headers)
+                    if res.status_code == 200:
+                        for q in res.json().get('quotes', []):
+                            sym = str(q.get('symbol', ''))
+                            if sym.endswith('.KS') or sym.endswith('.KQ'):
+                                is_korean = True
+                                target_symbol = sym.split('.')[0]
+                                break
+                            elif re.match(r'^[A-Z]+$', sym):
+                                is_korean = False
+                                target_symbol = sym
+                                break
+                except: pass
+
+            # 🚀 4단 로켓: 네이버 스크래핑 (최후의 보루)
+            if not target_symbol:
+                try:
                     euc_kr_query = urllib.parse.quote(query.encode('euc-kr'))
                     search_url = f"https://finance.naver.com/search/searchList.naver?query={euc_kr_query}"
                     res = requests.get(search_url, headers=headers)
-                    
-                    # 검색 결과가 하나라서 바로 주식 화면으로 넘어간 경우
                     if "item/main.naver?code=" in res.url:
                         is_korean = True
                         target_symbol = res.url.split("code=")[-1][:6]
                     else:
-                        # 검색 결과가 여러 개 나와서 리스트가 뜬 경우 첫 번째 종목 가져오기
-                        match = re.search(r'href="/item/main\.naver\?code=(\d{6})"', res.text)
+                        match = re.search(r'code=(\d{6})', res.text)
                         if match:
                             is_korean = True
                             target_symbol = match.group(1)
-                except Exception as e:
-                    print(f"네이버 웹 스크래핑 에러: {e}")
+                except: pass
 
-        # 모든 길을 다 거쳤는데도 없으면 404 에러 팝업!
         if not target_symbol:
             return JSONResponse(status_code=404, content={"detail": f"'{query}' 종목을 찾을 수 없습니다. 정확한 이름을 입력해주세요."})
 
         # ==========================================
-        # 🇰🇷 1. 한국 주식 로직 (차단 안 됨!)
+        # 🇰🇷 1. 한국 주식 로직
         # ==========================================
         if is_korean:
             symbol = target_symbol
@@ -140,7 +172,7 @@ def get_stock_data(query: str):
             }
 
         # ==========================================
-        # 🇺🇸 2. 미국 주식 로직 (차단 안 됨!)
+        # 🇺🇸 2. 미국 주식 로직
         # ==========================================
         else:
             reuters_code = ""
