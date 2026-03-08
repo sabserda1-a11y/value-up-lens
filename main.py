@@ -1,3 +1,4 @@
+import os
 import re
 import requests
 import urllib.parse
@@ -16,10 +17,47 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ==========================================
+# 🌟 1. 한국거래소(KRX) 공식 DB 훔쳐오기 (CSV 장부 완벽 대체!)
+# ==========================================
+def load_dynamic_krx_map():
+    stock_map = {}
+    try:
+        # KRX 상장법인목록 다운로드 공식 주소 (차단 안 당함!)
+        url = 'http://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13'
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        res = requests.get(url, headers=headers, timeout=10)
+        res.encoding = 'euc-kr' # 거래소는 옛날 암호를 씁니다
+        
+        # HTML을 가위(정규식)로 오려서 이름과 코드를 싹 빼옵니다.
+        rows = re.findall(r'<tr.*?>(.*?)</tr>', res.text, re.IGNORECASE | re.DOTALL)
+        for row in rows:
+            cols = re.findall(r'<td.*?>(.*?)</td>', row, re.IGNORECASE | re.DOTALL)
+            if len(cols) >= 2:
+                name = re.sub(r'<[^>]+>', '', cols[0]).strip().replace('&amp;', '&')
+                code = re.sub(r'<[^>]+>', '', cols[1]).strip()
+                if code.isdigit() and len(code) in [5, 6]:
+                    stock_map[name] = code.zfill(6)
+                    
+        # 사용자들이 자주 쓰는 애칭들만 보너스로 추가 (공식 명칭은 '현대자동차'이므로)
+        aliases = {
+            '현대차': '005380', '기아차': '000270', '기아': '000270',
+            '네이버': '035420', 'NAVER': '035420', '카카오': '035720',
+            'LG엔솔': '373220', '삼전': '005930', 'SK이노': '096770'
+        }
+        stock_map.update(aliases)
+        print(f"✅ KRX 자동 DB 로드 완료: 총 {len(stock_map)}개 종목 기억 완료!")
+    except Exception as e:
+        print(f"🔥 KRX DB 로드 에러: {e}")
+    return stock_map
+
+# 🌟 서버가 켜질 때 딱 1번만! 2,500개 종목을 머릿속에 집어넣습니다.
+STOCK_MAP = load_dynamic_krx_map()
+
 @app.get("/")
 @app.head("/")
 def read_root():
-    return {"status": "alive", "message": "100% Bulletproof Auto Search Engine is running."}
+    return {"status": "alive", "message": "Zero-Maintenance Dynamic Engine is running."}
 
 @app.get("/api/stock/{query}")
 def get_stock_data(query: str):
@@ -29,44 +67,42 @@ def get_stock_data(query: str):
         target_symbol = ""
         
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Referer": "https://m.stock.naver.com/" # 🌟 나는 모바일 네이버 사용자야! 하고 속이는 신분증
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
 
         # ==========================================
-        # 🌟 0. 스마트 통합 검색 라우터 (3중 방어막)
+        # 🌟 0. 스마트 통합 검색 라우터
         # ==========================================
         if query.isdigit():
             is_korean = True
             target_symbol = query.zfill(6)
+        # 🌟 여기서 핵심! 사용자가 검색한 이름이 내가 방금 외운 2,500개 중에 있다면?
+        # 네이버 검색 API 거치지 않고 프리패스 통과! (차단 확률 0%)
+        elif query in STOCK_MAP:
+            is_korean = True
+            target_symbol = STOCK_MAP[query]
         elif re.match(r'^[A-Za-z0-9]+$', query) and not any("\u3131" <= char <= "\u318E" or "\uAC00" <= char <= "\uD7A3" for char in query):
-            # 한글이 1도 안 섞인 순수 영문/숫자면 티커로 인식 (예: AAPL)
             is_korean = False
             target_symbol = query.upper()
         else:
-            # 🛡️ 방어막 1: 모바일 통합 검색 API (Render 서버 차단 확률 0%)
+            # 2,500개 목록에 없거나, 미국 주식을 한글로 검색(예: '애플') 했을 때만 야후/네이버 API를 씁니다.
             try:
-                search_url = "https://m.stock.naver.com/api/search/all"
-                res = requests.get(search_url, params={'keyword': query}, headers=headers)
-                if res.status_code == 200:
-                    items = res.json().get('searchList', [])
-                    if items:
-                        first_item = items[0]
-                        if first_item.get('stockType') == 'worldstock':
-                            is_korean = False
-                            target_symbol = str(first_item.get('symbolCode', '')).split('.')[0].upper()
-                        else:
+                yh_url = f"https://query2.finance.yahoo.com/v1/finance/search?q={urllib.parse.quote(query)}"
+                yh_res = requests.get(yh_url, headers=headers)
+                if yh_res.status_code == 200:
+                    quotes = yh_res.json().get('quotes', [])
+                    for q in quotes:
+                        sym = str(q.get('symbol', ''))
+                        if sym.endswith('.KS') or sym.endswith('.KQ'):
                             is_korean = True
-                            # 🌟 초강력 마법: 네이버가 키 이름을 숨겨도, 무조건 JSON 안에서 6자리 숫자를 빼옵니다!
-                            for key, val in first_item.items():
-                                val_str = str(val)
-                                if val_str.isdigit() and len(val_str) == 6:
-                                    target_symbol = val_str
-                                    break
-            except Exception as e:
-                print(f"방어막 1 에러: {e}")
+                            target_symbol = sym.split('.')[0]
+                            break
+                        elif re.match(r'^[A-Z]+$', sym):
+                            is_korean = False
+                            target_symbol = sym
+                            break
+            except: pass
 
-            # 🛡️ 방어막 2: 자동완성 API 백업
             if not target_symbol:
                 try:
                     ac_url = "https://ac.finance.naver.com/ac"
@@ -82,31 +118,8 @@ def get_stock_data(query: str):
                                         is_korean = True
                                         target_symbol = code_str
                                         break
-                                    elif re.match(r'^[A-Za-z0-9\.]+$', code_str) and not code_str.isdigit():
-                                        is_korean = False
-                                        target_symbol = code_str.split('.')[0].upper()
-                                        break
                                 if target_symbol: break
-                except Exception as e:
-                    print(f"방어막 2 에러: {e}")
-
-            # 🛡️ 방어막 3: EUC-KR 웹 스크래핑 백업
-            if not target_symbol:
-                try:
-                    euc_kr_query = urllib.parse.quote(query.encode('euc-kr'))
-                    search_url = f"https://finance.naver.com/search/searchList.naver?query={euc_kr_query}"
-                    res = requests.get(search_url, headers=headers)
-                    
-                    if "item/main.naver?code=" in res.url:
-                        is_korean = True
-                        target_symbol = res.url.split("code=")[-1][:6]
-                    else:
-                        match = re.search(r'/item/main\.naver\?code=(\d{6})', res.text)
-                        if match:
-                            is_korean = True
-                            target_symbol = match.group(1)
-                except Exception as e:
-                    print(f"방어막 3 에러: {e}")
+                except: pass
 
         if not target_symbol:
             return JSONResponse(status_code=404, content={"detail": f"'{query}' 종목을 찾을 수 없습니다. 정확한 이름을 입력해주세요."})
@@ -179,8 +192,7 @@ def get_stock_data(query: str):
                             dt = datetime.fromtimestamp(t).strftime('%Y-%m-%d')
                             date_list.append(dt)
                             trend_list.append(round(c, 2))
-                except Exception as e:
-                    print(f"야후 차트 파싱 에러: {e}")
+                except: pass
             
             if trend_list:
                 current_price = trend_list[-1]
@@ -194,7 +206,6 @@ def get_stock_data(query: str):
                 
                 if res.status_code == 200:
                     basic_res = res.json()
-                    
                     if 'stockItemTotalInfos' in basic_res:
                         reuters_code = f"{target_symbol}{ext}"
                         name = basic_res.get('stockName', target_symbol)
