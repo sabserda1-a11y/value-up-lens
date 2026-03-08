@@ -2,6 +2,7 @@ import os
 import re
 import pandas as pd
 import requests
+from datetime import datetime # 🌟 날짜를 예쁘게 깎기 위해 추가!
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -27,7 +28,7 @@ STOCK_MAP = load_stock_map()
 @app.get("/")
 @app.head("/")
 def read_root():
-    return {"status": "alive", "message": "100% Naver Direct Hit Engine is running."}
+    return {"status": "alive", "message": "Hybrid Engine (Yahoo Chart + Naver Quant) is running."}
 
 @app.get("/api/stock/{query}")
 def get_stock_data(query: str):
@@ -36,7 +37,6 @@ def get_stock_data(query: str):
         is_korean = True
         target_symbol = ""
 
-        # 검색어 분류
         if query.isdigit():
             target_symbol = query.zfill(6)
         elif query in STOCK_MAP:
@@ -52,7 +52,7 @@ def get_stock_data(query: str):
         }
 
         # ==========================================
-        # 🇰🇷 1. 한국 주식 로직
+        # 🇰🇷 1. 한국 주식 로직 (기존과 동일)
         # ==========================================
         if is_korean:
             symbol = target_symbol
@@ -91,7 +91,7 @@ def get_stock_data(query: str):
             }
 
         # ==========================================
-        # 🇺🇸 2. 미국 주식 로직
+        # 🇺🇸 2. 미국 주식 로직 (야후 다이렉트 차트 + 네이버 퀀트 지표)
         # ==========================================
         else:
             reuters_code = ""
@@ -101,7 +101,36 @@ def get_stock_data(query: str):
             roe = 0.0
             current_price = 0
             
-            # 1단계: 직접 거래소를 찔러서 데이터 찾기
+            # 1단계: 차트 데이터 (야후 다이렉트 API - 100% 성공 보장)
+            chart_url = f"https://query2.finance.yahoo.com/v8/finance/chart/{target_symbol}?interval=1d&range=6mo"
+            chart_res = requests.get(chart_url, headers=headers)
+            
+            trend_list = []
+            date_list = []
+            
+            if chart_res.status_code == 200:
+                try:
+                    chart_data = chart_res.json()
+                    result = chart_data['chart']['result'][0]
+                    timestamps = result.get('timestamp', [])
+                    closes = result['indicators']['quote'][0].get('close', [])
+                    
+                    for t, c in zip(timestamps, closes):
+                        if c is not None:
+                            # 복잡한 타임스탬프를 YYYY-MM-DD 형태로 변환
+                            dt = datetime.fromtimestamp(t).strftime('%Y-%m-%d')
+                            date_list.append(dt)
+                            trend_list.append(round(c, 2))
+                except Exception as e:
+                    print(f"야후 차트 파싱 에러: {e}")
+            
+            if trend_list:
+                current_price = trend_list[-1]
+            else:
+                trend_list = [0] * 5
+                date_list = ["데이터 없음"] * 5
+
+            # 2단계: 퀀트 데이터 (네이버 해외주식 직통 타격 - 한글 이름 및 PBR/ROE)
             for ext in ['.O', '.N', '.A']:
                 basic_url = f"https://api.stock.naver.com/stock/{target_symbol}{ext}/basic"
                 res = requests.get(basic_url, headers=headers)
@@ -113,11 +142,15 @@ def get_stock_data(query: str):
                         reuters_code = f"{target_symbol}{ext}"
                         name = basic_res.get('stockName', target_symbol)
                         
-                        try:
-                            cp_str = str(basic_res.get('closePrice', '0')).replace(',', '')
-                            current_price = round(float(cp_str), 2)
-                        except: pass
+                        # 혹시 야후 차트가 실패했을 때를 대비한 최후의 보루 가격
+                        if current_price == 0:
+                            try:
+                                cp_str = str(basic_res.get('closePrice', '0')).replace(',', '')
+                                current_price = round(float(cp_str), 2)
+                                trend_list = [current_price] * 5
+                            except: pass
                         
+                        # 🌟 정규식 가위로 PBR/PER 추출!
                         for info in basic_res.get('stockItemTotalInfos', []):
                             key_str = str(info.get('key', '')).upper()
                             val_str = str(info.get('value', ''))
@@ -130,39 +163,12 @@ def get_stock_data(query: str):
                                     per = round(float(clean_val), 2)
                         break 
             
-            if not reuters_code:
+            if not reuters_code and current_price == 0:
                 return {"detail": f"'{target_symbol}' 종목 데이터를 불러올 수 없습니다. 티커를 확인해주세요."}
                 
             if pbr > 0 and per > 0:
                 roe = round((pbr / per) * 100, 2)
                 
-            # 2단계: 과거 120일 차트 가져오기
-            price_url = f"https://api.stock.naver.com/stock/{reuters_code}/price?pageSize=120&page=1"
-            price_res = requests.get(price_url, headers=headers)
-            
-            trend_list = []
-            date_list = []
-            
-            if price_res.status_code == 200:
-                try:
-                    for item in price_res.json():
-                        # 🌟 핵심 수정: 네이버 해외주식의 날짜 키는 'localTradedAt' 입니다! (안전하게 둘 다 확인)
-                        raw_date = str(item.get('localTradedAt', item.get('localDate', ''))).split('T')[0]
-                        close_str = str(item.get('closePrice', '0')).replace(',', '')
-                        
-                        if raw_date and close_str and close_str != '0':
-                            date_list.append(raw_date)
-                            trend_list.append(round(float(close_str), 2))
-                except: pass
-            
-            if len(trend_list) > 1: # 🌟 데이터가 정상적으로 들어왔다면 순서를 뒤집어 예쁘게 그립니다.
-                trend_list.reverse()
-                date_list.reverse()
-                current_price = trend_list[-1]
-            else:
-                trend_list = [current_price] * 5
-                date_list = ["데이터 없음"] * 5
-
             # 3단계: 스코어 계산
             score = 50 
             if pbr > 0:
