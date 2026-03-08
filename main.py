@@ -18,7 +18,7 @@ app.add_middleware(
 @app.get("/")
 @app.head("/")
 def read_root():
-    return {"status": "alive", "message": "100% Auto Search Engine (Safe Encoding) is running."}
+    return {"status": "alive", "message": "100% Auto Search (Autocomplete API) Engine is running."}
 
 @app.get("/api/stock/{query}")
 def get_stock_data(query: str):
@@ -32,38 +32,51 @@ def get_stock_data(query: str):
         }
 
         # ==========================================
-        # 🌟 0. 스마트 통합 검색 라우터 (안전한 한글 포장 방식)
+        # 🌟 0. 스마트 통합 검색 라우터 (네이버 초고속 자동완성 API)
         # ==========================================
         if query.isdigit():
-            # 숫자만 치면 한국 주식 코드로 인식
             is_korean = True
             target_symbol = query.zfill(6)
         elif re.match(r'^[A-Za-z]+$', query):
-            # 순수 영어만 치면 미국 주식 티커로 인식
             is_korean = False
             target_symbol = query.upper()
         else:
-            # 🌟 핵심 수정: 한글 검색어는 requests의 params를 이용해 안전하게 포장해서 보냅니다!
-            search_url = "https://m.stock.naver.com/api/search/all"
+            # 한글 검색어 처리 (자동완성 API)
+            search_url = "https://ac.finance.naver.com/ac"
+            params = {
+                'q': query,
+                'q_enc': 'utf-8',
+                'st': '111',
+                'r_format': 'json',
+                't_koreng': '1'
+            }
             try:
-                res = requests.get(search_url, params={'keyword': query}, headers=headers)
+                res = requests.get(search_url, params=params, headers=headers)
                 if res.status_code == 200:
-                    items = res.json().get('searchList', [])
-                    if items:
-                        first_item = items[0]
-                        # 해외 주식인 경우 (예: '애플' 검색 시)
-                        if first_item.get('stockType') == 'worldstock':
-                            is_korean = False
-                            # AAPL.O 같은 형태에서 AAPL만 떼어냅니다.
-                            target_symbol = first_item.get('symbolCode', '').split('.')[0].upper()
-                        # 한국 주식인 경우 (예: '삼성전자' 검색 시)
-                        else:
-                            is_korean = True
-                            target_symbol = first_item.get('itemCode')
+                    data = res.json()
+                    items = data.get('items', [])
+                    
+                    # 자동완성 결과 리스트를 뒤져서 가장 정확한 첫 번째 종목을 찾습니다.
+                    for group in items:
+                        for item in group:
+                            if len(item) >= 3:
+                                market = str(item[2]).upper()
+                                # 한국 주식 (코스피, 코스닥 등)
+                                if market in ['KOSPI', 'KOSDAQ', 'KONEX']:
+                                    is_korean = True
+                                    target_symbol = str(item[1])
+                                    break
+                                # 미국 주식 (나스닥, 뉴욕 등)
+                                elif market in ['NASDAQ', 'NYSE', 'AMEX', 'NYSEAMEX'] or not str(item[1]).isdigit():
+                                    is_korean = False
+                                    target_symbol = str(item[1]).split('.')[0].upper()
+                                    break
+                        if target_symbol:
+                            break
             except Exception as e:
                 print(f"검색 API 에러: {e}")
 
-        # 포장해서 보냈는데도 못 찾았다면 에러 알림창을 띄웁니다.
+        # 찾지 못했을 때의 방어막
         if not target_symbol:
             return JSONResponse(status_code=404, content={"detail": f"'{query}' 종목을 찾을 수 없습니다. 정확한 이름을 입력해주세요."})
 
