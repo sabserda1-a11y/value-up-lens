@@ -97,12 +97,12 @@ def get_stock_data(query: str):
             }
 
        # ==========================================
-        # 🇺🇸 3. 미국 주식 로직 (야후 모바일 위젯 API + ROE 역산)
+        # 🇺🇸 3. 미국 주식 로직 (야후 차트 + 네이버 해외주식 퀀트)
         # ==========================================
         else:
             ticker = yf.Ticker(target_symbol)
             
-            # 1. 차트와 현재가 (야후 history API는 차단이 거의 없습니다)
+            # 1. 차트와 현재가 (이건 야후가 차단하지 않으니 그대로 씁니다!)
             hist = ticker.history(period="6mo")
             if hist.empty:
                 return {"detail": f"미국 주식 '{target_symbol}' 데이터를 찾을 수 없습니다."}
@@ -114,36 +114,47 @@ def get_stock_data(query: str):
                 date_list.append(date.strftime('%Y-%m-%d'))
                 trend_list.append(round(row['Close'], 2))
 
-            # 2. 퀀트 데이터 추출 (차단율이 0%에 가까운 야후 모바일 v7 API 사용!)
+            # 2. 퀀트 데이터 추출 (네이버 해외주식 API 활용 - 절대 막히지 않음!)
             name = target_symbol
             pbr = 0.0
             per = 0.0
             roe = 0.0
             
             try:
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-                }
-                # 야후 모바일 위젯이나 아이폰 기본 주식 앱이 사용하는 아주 가벼운 주소
-                v7_url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={target_symbol}"
+                headers = {"User-Agent": "Mozilla/5.0"}
                 
-                res = requests.get(v7_url, headers=headers)
-                data = res.json()
+                # 1단계: 네이버에서 NVDA를 검색해서 정확한 해외 종목코드(예: NVDA.O) 찾기
+                search_url = f"https://m.stock.naver.com/api/search/all?keyword={target_symbol}"
+                search_res = requests.get(search_url, headers=headers).json()
                 
-                # 데이터가 정상적으로 왔는지 확인
-                if "quoteResponse" in data and data["quoteResponse"]["result"]:
-                    quote = data["quoteResponse"]["result"][0]
+                reuters_code = ""
+                for item in search_res.get('searchList', []):
+                    # 해외 주식(worldstock)이고, 심볼이 일치하면 선택!
+                    if item.get('stockType') == 'worldstock' and item.get('symbolCode', '').upper() == target_symbol:
+                        reuters_code = item.get('reutersCode')
+                        name = item.get('stockName') # 🌟 보너스: '엔비디아', '애플' 같은 한글 이름을 가져옵니다!
+                        break
+                
+                # 2단계: 찾아낸 코드(NVDA.O 등)로 네이버에 재무 데이터 요청하기
+                if reuters_code:
+                    basic_url = f"https://api.stock.naver.com/stock/{reuters_code}/basic"
+                    basic_res = requests.get(basic_url, headers=headers).json()
                     
-                    name = quote.get("shortName", target_symbol)
-                    pbr = round(quote.get("priceToBook", 0.0), 2)
-                    per = quote.get("trailingPE", 0.0)
+                    pbr_str = basic_res.get('pbr', '0')
+                    per_str = basic_res.get('per', '0')
                     
-                    # 🌟 기획의 승리: 한국 주식과 동일하게 PBR과 PER로 ROE를 역산합니다!
+                    # 네이버는 데이터가 없으면 '-' 를 주므로 필터링합니다.
+                    if pbr_str and pbr_str != '-':
+                        pbr = round(float(str(pbr_str).replace(',', '')), 2)
+                    if per_str and per_str != '-':
+                        per = round(float(str(per_str).replace(',', '')), 2)
+                        
+                    # ROE 역산!
                     if pbr > 0 and per > 0:
                         roe = round((pbr / per) * 100, 2)
                         
             except Exception as e:
-                print(f"🔥 야후 v7 API 호출 실패: {e}")
+                print(f"🔥 네이버 글로벌 API 호출 실패: {e}")
                 
             # 3. 실제 데이터를 기반으로 퀀트 스코어 계산
             score = 50 
