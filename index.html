@@ -274,20 +274,27 @@ function updateChart(trendData, dateData, currency = "원") {
         }
     });
 }
-// 초기 화면 설정 (주소창 분석 기능 탑재)
+// 초기 화면 설정 (주소창 분석 및 엔터키 기능 탑재)
 window.onload = () => {
-    // 🌟 1. 현재 주소창에서 '?code=' 뒤에 있는 글자를 가져옵니다.
+    // 🌟 [신규] 검색창에서 엔터키를 누르면 자동으로 updateStock() 실행!
+    document.getElementById('stockSearch').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+            updateStock();
+        }
+    });
+
+    // 1. 현재 주소창에서 '?code=' 뒤에 있는 글자를 가져옵니다.
     const urlParams = new URLSearchParams(window.location.search);
     const codeFromUrl = urlParams.get('code');
 
-    // 🌟 2. 주소창에 코드가 있으면 그걸 검색창에 넣고, 없으면 기본값(현대차)을 넣습니다.
+    // 2. 주소창에 코드가 있으면 그걸 검색창에 넣고, 없으면 기본값(현대차)을 넣습니다.
     if (codeFromUrl) {
         document.getElementById('stockSearch').value = codeFromUrl;
     } else {
         document.getElementById('stockSearch').value = "005380";
     }
 
-    // 🌟 3. 세팅된 값으로 바로 자동 검색을 실행합니다!
+    // 3. 세팅된 값으로 바로 자동 검색을 실행합니다!
     updateStock();
 };
     </script>
