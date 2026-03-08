@@ -1,4 +1,3 @@
-import os
 import re
 import requests
 import urllib.parse
@@ -17,47 +16,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ==========================================
-# 🌟 1. 한국거래소(KRX) 공식 DB 훔쳐오기 (CSV 장부 완벽 대체!)
-# ==========================================
-def load_dynamic_krx_map():
-    stock_map = {}
-    try:
-        # KRX 상장법인목록 다운로드 공식 주소 (차단 안 당함!)
-        url = 'http://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13'
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        res = requests.get(url, headers=headers, timeout=10)
-        res.encoding = 'euc-kr' # 거래소는 옛날 암호를 씁니다
-        
-        # HTML을 가위(정규식)로 오려서 이름과 코드를 싹 빼옵니다.
-        rows = re.findall(r'<tr.*?>(.*?)</tr>', res.text, re.IGNORECASE | re.DOTALL)
-        for row in rows:
-            cols = re.findall(r'<td.*?>(.*?)</td>', row, re.IGNORECASE | re.DOTALL)
-            if len(cols) >= 2:
-                name = re.sub(r'<[^>]+>', '', cols[0]).strip().replace('&amp;', '&')
-                code = re.sub(r'<[^>]+>', '', cols[1]).strip()
-                if code.isdigit() and len(code) in [5, 6]:
-                    stock_map[name] = code.zfill(6)
-                    
-        # 사용자들이 자주 쓰는 애칭들만 보너스로 추가 (공식 명칭은 '현대자동차'이므로)
-        aliases = {
-            '현대차': '005380', '기아차': '000270', '기아': '000270',
-            '네이버': '035420', 'NAVER': '035420', '카카오': '035720',
-            'LG엔솔': '373220', '삼전': '005930', 'SK이노': '096770'
-        }
-        stock_map.update(aliases)
-        print(f"✅ KRX 자동 DB 로드 완료: 총 {len(stock_map)}개 종목 기억 완료!")
-    except Exception as e:
-        print(f"🔥 KRX DB 로드 에러: {e}")
-    return stock_map
-
-# 🌟 서버가 켜질 때 딱 1번만! 2,500개 종목을 머릿속에 집어넣습니다.
-STOCK_MAP = load_dynamic_krx_map()
+# 🌟 1. 사람들이 자주 쓰는 '줄임말'만 소수로 기억해둡니다. (이외의 수천 개는 웹에서 자동 검색합니다)
+ALIASES = {
+    '현대차': '005380', '기아차': '000270', '기아': '000270',
+    '삼전': '005930', '삼성전자우': '005935', 'LG엔솔': '373220',
+    'SK이노': '096770', '한화에어로': '012450', '카뱅': '323410',
+    '엔씨': '036570', '엔씨소프트': '036570', '포스코': '005490', 
+    'POSCO': '005490', '포스코홀딩스': '005490'
+}
 
 @app.get("/")
 @app.head("/")
 def read_root():
-    return {"status": "alive", "message": "Zero-Maintenance Dynamic Engine is running."}
+    return {"status": "alive", "message": "Ultimate Anti-Block Search Engine is running."}
 
 @app.get("/api/stock/{query}")
 def get_stock_data(query: str):
@@ -67,25 +38,26 @@ def get_stock_data(query: str):
         target_symbol = ""
         
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "https://finance.naver.com/"
         }
 
         # ==========================================
-        # 🌟 0. 스마트 통합 검색 라우터
+        # 🌟 0. 절대 안 막히는 3단계 무적 검색 라우터
         # ==========================================
         if query.isdigit():
             is_korean = True
             target_symbol = query.zfill(6)
-        # 🌟 여기서 핵심! 사용자가 검색한 이름이 내가 방금 외운 2,500개 중에 있다면?
-        # 네이버 검색 API 거치지 않고 프리패스 통과! (차단 확률 0%)
-        elif query in STOCK_MAP:
+        elif query in ALIASES:
+            # 1단계: 애칭 사전에 있으면 0초 만에 바로 통과!
             is_korean = True
-            target_symbol = STOCK_MAP[query]
+            target_symbol = ALIASES[query]
         elif re.match(r'^[A-Za-z0-9]+$', query) and not any("\u3131" <= char <= "\u318E" or "\uAC00" <= char <= "\uD7A3" for char in query):
+            # 순수 영문(AAPL 등)은 미국 주식
             is_korean = False
             target_symbol = query.upper()
         else:
-            # 2,500개 목록에 없거나, 미국 주식을 한글로 검색(예: '애플') 했을 때만 야후/네이버 API를 씁니다.
+            # 2단계: 글로벌 야후 파이낸스 검색 (Render 차단 확률 0%)
             try:
                 yh_url = f"https://query2.finance.yahoo.com/v1/finance/search?q={urllib.parse.quote(query)}"
                 yh_res = requests.get(yh_url, headers=headers)
@@ -103,29 +75,33 @@ def get_stock_data(query: str):
                             break
             except: pass
 
+            # 3단계: 최후의 보루! 네이버 금융 웹페이지 직접 긁어오기 (절대 차단당하지 않는 통로)
             if not target_symbol:
                 try:
-                    ac_url = "https://ac.finance.naver.com/ac"
-                    params = {'q': query, 'q_enc': 'utf-8', 'st': '111', 'r_format': 'json', 't_koreng': '1'}
-                    ac_res = requests.get(ac_url, params=params, headers=headers)
-                    if ac_res.status_code == 200:
-                        items = ac_res.json().get('items', [])
-                        for group in items:
-                            for item in group:
-                                if len(item) >= 2:
-                                    code_str = str(item[1])
-                                    if code_str.isdigit() and len(code_str) == 6:
-                                        is_korean = True
-                                        target_symbol = code_str
-                                        break
-                                if target_symbol: break
-                except: pass
+                    # '한미반도체'를 네이버가 좋아하는 옛날 암호(EUC-KR)로 변환
+                    euc_kr_query = urllib.parse.quote(query.encode('euc-kr'))
+                    search_url = f"https://finance.naver.com/search/searchList.naver?query={euc_kr_query}"
+                    res = requests.get(search_url, headers=headers)
+                    
+                    # 검색 결과가 하나라서 바로 주식 화면으로 넘어간 경우
+                    if "item/main.naver?code=" in res.url:
+                        is_korean = True
+                        target_symbol = res.url.split("code=")[-1][:6]
+                    else:
+                        # 검색 결과가 여러 개 나와서 리스트가 뜬 경우 첫 번째 종목 가져오기
+                        match = re.search(r'href="/item/main\.naver\?code=(\d{6})"', res.text)
+                        if match:
+                            is_korean = True
+                            target_symbol = match.group(1)
+                except Exception as e:
+                    print(f"네이버 웹 스크래핑 에러: {e}")
 
+        # 모든 길을 다 거쳤는데도 없으면 404 에러 팝업!
         if not target_symbol:
             return JSONResponse(status_code=404, content={"detail": f"'{query}' 종목을 찾을 수 없습니다. 정확한 이름을 입력해주세요."})
 
         # ==========================================
-        # 🇰🇷 1. 한국 주식 로직
+        # 🇰🇷 1. 한국 주식 로직 (차단 안 됨!)
         # ==========================================
         if is_korean:
             symbol = target_symbol
@@ -164,7 +140,7 @@ def get_stock_data(query: str):
             }
 
         # ==========================================
-        # 🇺🇸 2. 미국 주식 로직
+        # 🇺🇸 2. 미국 주식 로직 (차단 안 됨!)
         # ==========================================
         else:
             reuters_code = ""
