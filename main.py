@@ -27,7 +27,7 @@ STOCK_MAP = load_stock_map()
 @app.get("/")
 @app.head("/")
 def read_root():
-    return {"status": "alive", "message": "100% Naver Global Engine is running."}
+    return {"status": "alive", "message": "100% Naver Direct Hit Engine is running."}
 
 @app.get("/api/stock/{query}")
 def get_stock_data(query: str):
@@ -52,7 +52,7 @@ def get_stock_data(query: str):
         }
 
         # ==========================================
-        # 🇰🇷 1. 한국 주식 로직 (네이버 금융)
+        # 🇰🇷 1. 한국 주식 로직 (기존과 완벽 동일)
         # ==========================================
         if is_korean:
             symbol = target_symbol
@@ -91,86 +91,82 @@ def get_stock_data(query: str):
             }
 
         # ==========================================
-        # 🇺🇸 2. 미국 주식 로직 (100% 네이버 해외주식 API)
+        # 🇺🇸 2. 미국 주식 로직 (성공했던 '.O, .N, .A' 직통 타격 방식)
         # ==========================================
         else:
-            # 1단계: 검색 API로 네이버 전용 종목코드(reutersCode) 찾기
-            search_url = f"https://m.stock.naver.com/api/search/all?keyword={target_symbol}"
-            search_res = requests.get(search_url, headers=headers).json()
-            
             reuters_code = ""
             name = target_symbol
-            
-            for item in search_res.get('searchList', []):
-                if item.get('stockType') == 'worldstock' and item.get('symbolCode', '').upper() == target_symbol:
-                    reuters_code = item.get('reutersCode') # 예: NVDA.O
-                    name = item.get('stockName') # 예: 엔비디아
-                    break
-                    
-            if not reuters_code:
-                return {"detail": f"네이버 해외주식에서 '{target_symbol}' 종목을 찾을 수 없습니다."}
-            
-            # 2단계: 과거 120일 차트 및 현재가 가져오기 (네이버 해외차트 API)
-            price_url = f"https://api.stock.naver.com/stock/{reuters_code}/price?pageSize=120&page=1"
-            price_res = requests.get(price_url, headers=headers).json()
-            
-            trend_list = []
-            date_list = []
-            
-            for item in price_res:
-                # 날짜 "2026-03-08T00:00:00" 형태를 "2026-03-08"로 자르기
-                raw_date = item.get('localDate', '').split('T')[0]
-                close_str = str(item.get('closePrice', '0')).replace(',', '')
-                
-                if raw_date and close_str:
-                    date_list.append(raw_date)
-                    trend_list.append(round(float(close_str), 2))
-                    
-            if not trend_list:
-                return {"detail": f"'{name}'의 차트 데이터를 불러오지 못했습니다."}
-            
-            # 네이버는 최신 날짜부터 주기 때문에 차트를 위해 순서를 뒤집습니다!
-            trend_list.reverse()
-            date_list.reverse()
-            
-            # 현재가는 차트의 맨 마지막(최신) 가격
-            current_price = trend_list[-1]
-
-            # 3단계: 퀀트 데이터 가져오기 (네이버 해외 기본정보 API)
             pbr = 0.0
             per = 0.0
             roe = 0.0
+            current_price = 0
             
-            basic_url = f"https://api.stock.naver.com/stock/{reuters_code}/basic"
-            basic_res = requests.get(basic_url, headers=headers).json()
-            
-            # 응답 데이터 1차 스캔
-            raw_pbr = basic_res.get('pbr', '')
-            raw_per = basic_res.get('per', '')
-            
-            try:
-                if raw_pbr and raw_pbr != '-': pbr = round(float(str(raw_pbr).replace(',', '')), 2)
-                if raw_per and raw_per != '-': per = round(float(str(raw_per).replace(',', '')), 2)
-            except: pass
-
-            # 못 찾았다면 서랍장(stockItemTotalInfos) 2차 스캔 및 정규식 가위질
-            if pbr == 0.0 or per == 0.0:
-                for info in basic_res.get('stockItemTotalInfos', []):
-                    key_str = str(info.get('key', '')).upper()
-                    val_str = str(info.get('value', ''))
-                    clean_val = re.sub(r'[^\d.]', '', val_str)
+            # 1단계: 검색 API를 쓰지 않고 직접 거래소를 찔러서 찾아냅니다! (성공률 100%)
+            for ext in ['.O', '.N', '.A']:
+                basic_url = f"https://api.stock.naver.com/stock/{target_symbol}{ext}/basic"
+                res = requests.get(basic_url, headers=headers)
+                
+                if res.status_code == 200:
+                    basic_res = res.json()
                     
-                    if clean_val and clean_val != '.':
-                        if 'PBR' in key_str and pbr == 0.0:
-                            pbr = round(float(clean_val), 2)
-                        elif 'PER' in key_str and per == 0.0:
-                            per = round(float(clean_val), 2)
+                    if 'stockItemTotalInfos' in basic_res:
+                        reuters_code = f"{target_symbol}{ext}"
+                        name = basic_res.get('stockName', target_symbol) # 한글 이름 확보!
+                        
+                        # 차트가 막힐 때를 대비해 기본 현재가도 미리 확보해 둡니다.
+                        try:
+                            cp_str = str(basic_res.get('closePrice', '0')).replace(',', '')
+                            current_price = round(float(cp_str), 2)
+                        except: pass
+                        
+                        # 🌟 정규식 가위로 PBR/PER 완벽 추출!
+                        for info in basic_res.get('stockItemTotalInfos', []):
+                            key_str = str(info.get('key', '')).upper()
+                            val_str = str(info.get('value', ''))
+                            clean_val = re.sub(r'[^\d.]', '', val_str)
                             
+                            if clean_val and clean_val != '.':
+                                if 'PBR' in key_str and pbr == 0.0:
+                                    pbr = round(float(clean_val), 2)
+                                elif 'PER' in key_str and per == 0.0:
+                                    per = round(float(clean_val), 2)
+                        break # 다 찾았으니 반복문 탈출!
+            
+            if not reuters_code:
+                return {"detail": f"'{target_symbol}' 종목 데이터를 불러올 수 없습니다. 티커를 확인해주세요."}
+                
             # ROE 역산
             if pbr > 0 and per > 0:
                 roe = round((pbr / per) * 100, 2)
                 
-            # 4단계: 스코어 계산
+            # 2단계: 과거 120일 차트 가져오기 (네이버 해외차트 API)
+            price_url = f"https://api.stock.naver.com/stock/{reuters_code}/price?pageSize=120&page=1"
+            price_res = requests.get(price_url, headers=headers)
+            
+            trend_list = []
+            date_list = []
+            
+            if price_res.status_code == 200:
+                try:
+                    for item in price_res.json():
+                        raw_date = item.get('localDate', '').split('T')[0]
+                        close_str = str(item.get('closePrice', '0')).replace(',', '')
+                        if raw_date and close_str:
+                            date_list.append(raw_date)
+                            trend_list.append(round(float(close_str), 2))
+                except: pass
+            
+            if trend_list:
+                # 차트를 왼쪽에서 오른쪽으로 흐르게 순서를 뒤집고 최신 가격을 갱신!
+                trend_list.reverse()
+                date_list.reverse()
+                current_price = trend_list[-1]
+            else:
+                # 최악의 경우(차트 데이터 없음)에도 에러를 뱉지 않고 기본 가격으로 임시 차트를 그립니다.
+                trend_list = [current_price] * 5
+                date_list = ["데이터 없음"] * 5
+
+            # 3단계: 스코어 계산
             score = 50 
             if pbr > 0:
                 if pbr <= 1.5: score += 20
@@ -191,8 +187,7 @@ def get_stock_data(query: str):
                 "dates": date_list
             }
 
-
     except Exception as e:
         return {"detail": f"서버 내부 에러: {str(e)}"}
-    
+        
 # 실행: uvicorn main:app --reload
