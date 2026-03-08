@@ -2,7 +2,6 @@ import os
 import re
 import pandas as pd
 import requests
-from datetime import datetime  # 🌟 날짜 변환을 위해 새로 추가된 도구!
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -28,7 +27,7 @@ STOCK_MAP = load_stock_map()
 @app.get("/")
 @app.head("/")
 def read_root():
-    return {"status": "alive", "message": "Pure API Engine (No yfinance) is running."}
+    return {"status": "alive", "message": "100% Naver Global Engine is running."}
 
 @app.get("/api/stock/{query}")
 def get_stock_data(query: str):
@@ -37,6 +36,7 @@ def get_stock_data(query: str):
         is_korean = True
         target_symbol = ""
 
+        # 검색어 분류
         if query.isdigit():
             target_symbol = query.zfill(6)
         elif query in STOCK_MAP:
@@ -52,7 +52,7 @@ def get_stock_data(query: str):
         }
 
         # ==========================================
-        # 🇰🇷 1. 한국 주식 로직 (기존과 동일)
+        # 🇰🇷 1. 한국 주식 로직 (네이버 금융)
         # ==========================================
         if is_korean:
             symbol = target_symbol
@@ -91,81 +91,86 @@ def get_stock_data(query: str):
             }
 
         # ==========================================
-        # 🇺🇸 2. 미국 주식 로직 (yfinance 삭제! 100% 순수 API 직접 통신)
+        # 🇺🇸 2. 미국 주식 로직 (100% 네이버 해외주식 API)
         # ==========================================
         else:
-            # 1단계: 차트와 현재가 (야후의 진짜 숨겨진 차트 API 직접 찌르기)
-            chart_url = f"https://query2.finance.yahoo.com/v8/finance/chart/{target_symbol}?interval=1d&range=6mo"
-            chart_res = requests.get(chart_url, headers=headers)
+            # 1단계: 검색 API로 네이버 전용 종목코드(reutersCode) 찾기
+            search_url = f"https://m.stock.naver.com/api/search/all?keyword={target_symbol}"
+            search_res = requests.get(search_url, headers=headers).json()
             
-            if chart_res.status_code != 200:
-                return {"detail": f"미국 주식 '{target_symbol}' 차트 데이터를 불러올 수 없습니다."}
-                
-            chart_data = chart_res.json()
-            result = chart_data['chart']['result'][0]
+            reuters_code = ""
+            name = target_symbol
             
-            # 시간(timestamp)과 가격(close) 데이터를 직접 빼옵니다.
-            timestamps = result.get('timestamp', [])
-            closes = result['indicators']['quote'][0].get('close', [])
+            for item in search_res.get('searchList', []):
+                if item.get('stockType') == 'worldstock' and item.get('symbolCode', '').upper() == target_symbol:
+                    reuters_code = item.get('reutersCode') # 예: NVDA.O
+                    name = item.get('stockName') # 예: 엔비디아
+                    break
+                    
+            if not reuters_code:
+                return {"detail": f"네이버 해외주식에서 '{target_symbol}' 종목을 찾을 수 없습니다."}
+            
+            # 2단계: 과거 120일 차트 및 현재가 가져오기 (네이버 해외차트 API)
+            price_url = f"https://api.stock.naver.com/stock/{reuters_code}/price?pageSize=120&page=1"
+            price_res = requests.get(price_url, headers=headers).json()
             
             trend_list = []
             date_list = []
             
-            for t, c in zip(timestamps, closes):
-                if c is not None:
-                    # 복잡한 숫자로 된 시간을 '2026-03-08' 형태로 예쁘게 바꿉니다.
-                    dt = datetime.fromtimestamp(t).strftime('%Y-%m-%d')
-                    date_list.append(dt)
-                    trend_list.append(round(c, 2))
+            for item in price_res:
+                # 날짜 "2026-03-08T00:00:00" 형태를 "2026-03-08"로 자르기
+                raw_date = item.get('localDate', '').split('T')[0]
+                close_str = str(item.get('closePrice', '0')).replace(',', '')
+                
+                if raw_date and close_str:
+                    date_list.append(raw_date)
+                    trend_list.append(round(float(close_str), 2))
                     
             if not trend_list:
-                return {"detail": f"미국 주식 '{target_symbol}' 차트 데이터가 비어있습니다."}
-                
+                return {"detail": f"'{name}'의 차트 데이터를 불러오지 못했습니다."}
+            
+            # 네이버는 최신 날짜부터 주기 때문에 차트를 위해 순서를 뒤집습니다!
+            trend_list.reverse()
+            date_list.reverse()
+            
+            # 현재가는 차트의 맨 마지막(최신) 가격
             current_price = trend_list[-1]
 
-            # 2단계: 퀀트 데이터 (네이버 해외주식 API)
-            name = target_symbol
+            # 3단계: 퀀트 데이터 가져오기 (네이버 해외 기본정보 API)
             pbr = 0.0
             per = 0.0
             roe = 0.0
             
+            basic_url = f"https://api.stock.naver.com/stock/{reuters_code}/basic"
+            basic_res = requests.get(basic_url, headers=headers).json()
+            
+            # 응답 데이터 1차 스캔
+            raw_pbr = basic_res.get('pbr', '')
+            raw_per = basic_res.get('per', '')
+            
             try:
-                # NVDA를 검색해서 네이버 전용 코드(NVDA.O)를 찾아냅니다.
-                search_url = f"https://m.stock.naver.com/api/search/all?keyword={target_symbol}"
-                search_res = requests.get(search_url, headers=headers).json()
-                
-                reuters_code = ""
-                for item in search_res.get('searchList', []):
-                    if item.get('stockType') == 'worldstock' and item.get('symbolCode', '').upper() == target_symbol:
-                        reuters_code = item.get('reutersCode')
-                        name = item.get('stockName') # 한글 이름 확보!
-                        break
-                        
-                # 코드를 찾았으면 재무 서랍장을 엽니다.
-                if reuters_code:
-                    basic_url = f"https://api.stock.naver.com/stock/{reuters_code}/basic"
-                    basic_res = requests.get(basic_url, headers=headers).json()
-                    
-                    for info in basic_res.get('stockItemTotalInfos', []):
-                        key_str = str(info.get('key', '')).upper()
-                        val_str = str(info.get('value', ''))
-                        
-                        # 🌟 문자열 가위 (숫자와 소수점만 남기기)
-                        clean_val = re.sub(r'[^\d.]', '', val_str)
-                        
-                        if clean_val and clean_val != '.':
-                            if 'PBR' in key_str:
-                                pbr = round(float(clean_val), 2)
-                            elif 'PER' in key_str:
-                                per = round(float(clean_val), 2)
-                                
-                # ROE 역산!
-                if pbr > 0 and per > 0:
-                    roe = round((pbr / per) * 100, 2)
-            except Exception as e:
-                print(f"🔥 네이버 퀀트 에러: {e}")
+                if raw_pbr and raw_pbr != '-': pbr = round(float(str(raw_pbr).replace(',', '')), 2)
+                if raw_per and raw_per != '-': per = round(float(str(raw_per).replace(',', '')), 2)
+            except: pass
 
-            # 3단계: 점수 계산
+            # 못 찾았다면 서랍장(stockItemTotalInfos) 2차 스캔 및 정규식 가위질
+            if pbr == 0.0 or per == 0.0:
+                for info in basic_res.get('stockItemTotalInfos', []):
+                    key_str = str(info.get('key', '')).upper()
+                    val_str = str(info.get('value', ''))
+                    clean_val = re.sub(r'[^\d.]', '', val_str)
+                    
+                    if clean_val and clean_val != '.':
+                        if 'PBR' in key_str and pbr == 0.0:
+                            pbr = round(float(clean_val), 2)
+                        elif 'PER' in key_str and per == 0.0:
+                            per = round(float(clean_val), 2)
+                            
+            # ROE 역산
+            if pbr > 0 and per > 0:
+                roe = round((pbr / per) * 100, 2)
+                
+            # 4단계: 스코어 계산
             score = 50 
             if pbr > 0:
                 if pbr <= 1.5: score += 20
@@ -185,6 +190,9 @@ def get_stock_data(query: str):
                 "trend": trend_list, 
                 "dates": date_list
             }
+
+    except Exception as e:
+        return {"detail": f"서버 내부 에러: {str(e)}"}
 
     except Exception as e:
         return {"detail": f"서버 내부 에러: {str(e)}"}
