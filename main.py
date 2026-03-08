@@ -97,12 +97,12 @@ def get_stock_data(query: str):
             }
 
        # ==========================================
-        # 🇺🇸 3. 미국 주식 로직 (야후 숨겨진 API 직접 호출)
+        # 🇺🇸 3. 미국 주식 로직 (야후 차트 + Finviz 퀀트 데이터 결합)
         # ==========================================
         else:
             ticker = yf.Ticker(target_symbol)
             
-            # 1. 차트와 현재가 (이건 yfinance가 아주 잘 가져옵니다)
+            # 1. 차트와 현재가 (야후의 history는 잘 작동하므로 그대로 씁니다)
             hist = ticker.history(period="6mo")
             if hist.empty:
                 return {"detail": f"미국 주식 '{target_symbol}' 데이터를 찾을 수 없습니다."}
@@ -114,38 +114,37 @@ def get_stock_data(query: str):
                 date_list.append(date.strftime('%Y-%m-%d'))
                 trend_list.append(round(row['Close'], 2))
 
-            # 2. 진짜 퀀트 데이터 추출 (야후 비밀 API 직접 타격!)
+            # 2. 진짜 퀀트 데이터 추출 (Finviz 사이트 정면 돌파!)
             name = target_symbol
             pbr = 0.0
             roe = 0.0
             
             try:
-                # 브라우저인 척 위장
                 headers = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
                 }
-                # 야후의 숨겨진 재무 데이터 전용 주소
-                yahoo_api_url = f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{target_symbol}?modules=defaultKeyStatistics,financialData,price"
+                # 핀비즈(Finviz) 사이트 주소
+                finviz_url = f"https://finviz.com/quote.ashx?t={target_symbol}"
+                html = requests.get(finviz_url, headers=headers).text
                 
-                res = requests.get(yahoo_api_url, headers=headers)
-                data = res.json()
+                # HTML 텍스트에서 P/B (PBR) 값 오려내기
+                if 'P/B</td>' in html:
+                    try:
+                        pb_str = html.split('P/B</td>')[1].split('<b>')[1].split('</b>')[0]
+                        if pb_str != '-': # 데이터가 없는 경우 방어
+                            pbr = float(pb_str)
+                    except: pass
                 
-                result = data['quoteSummary']['result'][0]
-                
-                # 종목명 가져오기
-                if 'price' in result and 'shortName' in result['price']:
-                    name = result['price']['shortName']
-                
-                # PBR 가져오기
-                if 'defaultKeyStatistics' in result and 'priceToBook' in result['defaultKeyStatistics']:
-                    pbr = round(float(result['defaultKeyStatistics']['priceToBook']['raw']), 2)
-                
-                # ROE 가져오기
-                if 'financialData' in result and 'returnOnEquity' in result['financialData']:
-                    roe = round(float(result['financialData']['returnOnEquity']['raw']) * 100, 2)
+                # HTML 텍스트에서 ROE 값 오려내기
+                if 'ROE</td>' in html:
+                    try:
+                        roe_str = html.split('ROE</td>')[1].split('<b>')[1].split('</b>')[0].replace('%', '')
+                        if roe_str != '-':
+                            roe = float(roe_str)
+                    except: pass
                     
             except Exception as e:
-                print(f"🔥 야후 퀀트 데이터 직접 호출 실패: {e}")
+                print(f"🔥 Finviz 퀀트 데이터 스크래핑 실패: {e}")
                 
             # 3. 실제 데이터를 기반으로 퀀트 스코어 계산
             score = 50 
