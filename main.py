@@ -16,7 +16,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 🌟 0단계: 가장 많이 찾는 미국 주식 한글 번역기 (야후 검색이 실패할 때를 대비한 철통 방어!)
+# 🌟 유명 해외 주식 초고속 번역기
 US_ALIASES = {
     '애플': 'AAPL', '테슬라': 'TSLA', '엔비디아': 'NVDA', '마이크로소프트': 'MSFT', '마소': 'MSFT',
     '아마존': 'AMZN', '구글': 'GOOGL', '알파벳': 'GOOGL', '메타': 'META', '페이스북': 'META',
@@ -29,7 +29,7 @@ US_ALIASES = {
 @app.get("/")
 @app.head("/")
 def read_root():
-    return {"status": "alive", "message": "ZUM & StockPlus Bypass Engine is running."}
+    return {"status": "alive", "message": "Daum Finance Master Engine is running."}
 
 @app.get("/api/stock/{query}")
 def get_stock_data(query: str):
@@ -43,50 +43,47 @@ def get_stock_data(query: str):
         }
 
         # ==========================================
-        # 🌟 절대 막히지 않는 스마트 통합 검색 라우터
+        # 🌟 절대 막히지 않는 스마트 라우터 (Daum 금융 메인!)
         # ==========================================
         if query.isdigit():
             is_korean = True
             target_symbol = query.zfill(6)
         elif query in US_ALIASES:
-            # 💡 기획자님이 '애플'을 치면 여기서 바로 'AAPL'로 번역해서 프리패스!
             is_korean = False
             target_symbol = US_ALIASES[query]
         elif re.match(r'^[A-Za-z0-9\.]+$', query) and not any("\u3131" <= char <= "\u318E" or "\uAC00" <= char <= "\uD7A3" for char in query):
             is_korean = False
             target_symbol = query.upper()
         else:
-            # 🚀 1단 로켓: ZUM 투자 API (외국 IP 절대 차단 안 함!)
+            # 🚀 1단 로켓: 다음(Daum) 금융 검색 API (외국 클라우드 IP 차단 없음!)
             try:
-                zum_url = f"https://finance.zum.com/api/search/auto-complete?keyword={urllib.parse.quote(query)}"
-                zum_res = requests.get(zum_url, headers=headers)
-                if zum_res.status_code == 200:
-                    data = zum_res.json()
-                    # ZUM에서 국내 주식 코드를 찾아냅니다. (예: 파마리서치 -> 214450)
-                    if 'stocks' in data and len(data['stocks']) > 0:
-                        is_korean = True
-                        target_symbol = str(data['stocks'][0].get('code', ''))
+                daum_url = f"https://finance.daum.net/api/search/autocomplete?q={urllib.parse.quote(query)}"
+                # 💡 핵심 마법: 다음 금융은 이 Referer 신분증이 있어야만 문을 열어줍니다!
+                daum_headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                    "Referer": "https://finance.daum.net/"
+                }
+                daum_res = requests.get(daum_url, headers=daum_headers)
+                
+                if daum_res.status_code == 200:
+                    data = daum_res.json()
+                    stocks = data.get("stock", [])
+                    foreign_stocks = data.get("foreignStock", [])
+                    
+                    # 한국 주식에서 찾았을 때 (예: 파마리서치 -> A214450)
+                    if stocks:
+                        code = str(stocks[0].get("symbolCode", ""))
+                        if code.startswith("A") and len(code) == 7:
+                            is_korean = True
+                            target_symbol = code[1:] # A 떼고 214450만 쏙!
+                    # 해외 주식에서 찾았을 때
+                    elif foreign_stocks:
+                        is_korean = False
+                        target_symbol = str(foreign_stocks[0].get("symbolCode", "")).upper()
             except Exception as e:
-                print(f"ZUM API 에러: {e}")
+                print(f"Daum API 에러: {e}")
 
-            # 🚀 2단 로켓: 증권플러스(업비트) API (1단이 실패했을 때, 역시 차단 없음!)
-            if not target_symbol:
-                try:
-                    sp_url = "https://stockplus.com/api/search.json"
-                    sp_res = requests.get(sp_url, params={"keyword": query}, headers=headers)
-                    if sp_res.status_code == 200:
-                        items = sp_res.json().get('items', [])
-                        if items:
-                            first = items[0].get('item', {})
-                            code = str(first.get('code', ''))
-                            # 증권플러스는 한국 주식 앞에 'A'를 붙입니다 (예: A214450)
-                            if code.startswith('A') and code[1:].isdigit():
-                                is_korean = True
-                                target_symbol = code[1:]
-                except Exception as e:
-                    print(f"StockPlus API 에러: {e}")
-
-            # 🚀 3단 로켓: 야후 파이낸스 글로벌 (미국 주식 백업용)
+            # 🚀 2단 로켓: 야후 파이낸스 글로벌 (만약의 사태를 대비한 백업)
             if not target_symbol:
                 try:
                     yh_url = f"https://query2.finance.yahoo.com/v1/finance/search?q={urllib.parse.quote(query)}"
@@ -108,7 +105,7 @@ def get_stock_data(query: str):
             return JSONResponse(status_code=404, content={"detail": f"'{query}' 종목을 찾을 수 없습니다. 정확한 이름을 입력해주세요."})
 
         # ==========================================
-        # 🇰🇷 한국 주식 로직 (데이터 서버는 차단 안 됨!)
+        # 🇰🇷 한국 주식 로직 (데이터 통신은 네이버가 최고!)
         # ==========================================
         if is_korean:
             symbol = target_symbol
@@ -147,7 +144,7 @@ def get_stock_data(query: str):
             }
 
         # ==========================================
-        # 🇺🇸 미국 주식 로직 (데이터 서버는 차단 안 됨!)
+        # 🇺🇸 미국 주식 로직
         # ==========================================
         else:
             reuters_code = ""
