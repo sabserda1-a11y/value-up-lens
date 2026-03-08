@@ -97,7 +97,7 @@ def get_stock_data(query: str):
             }
 
        # ==========================================
-        # 🇺🇸 3. 미국 주식 로직 (네이버 직통 타격 + 야후 차트)
+        # 🇺🇸 3. 미국 주식 로직 (네이버 직통 타격 + 정규식 가위)
         # ==========================================
         else:
             ticker = yf.Ticker(target_symbol)
@@ -114,7 +114,8 @@ def get_stock_data(query: str):
                 date_list.append(date.strftime('%Y-%m-%d'))
                 trend_list.append(round(row['Close'], 2))
 
-            # 2. 퀀트 데이터 (네이버 해외주식 서랍장 직접 열기)
+            # 2. 퀀트 데이터 (네이버 해외주식 서랍장 열고 '배' 글자 떼어내기)
+            import re # 🌟 파이썬의 문자열 오리기 가위(정규식)를 가져옵니다!
             name = target_symbol
             pbr = 0.0
             per = 0.0
@@ -123,7 +124,7 @@ def get_stock_data(query: str):
             try:
                 headers = {"User-Agent": "Mozilla/5.0"}
                 
-                # 1단계: 나스닥(.O), 뉴욕(.N), 아멕스(.A) 거래소를 순서대로 찔러봅니다!
+                # 나스닥(.O), 뉴욕(.N), 아멕스(.A) 거래소를 순서대로 확인
                 for ext in ['.O', '.N', '.A']:
                     basic_url = f"https://api.stock.naver.com/stock/{target_symbol}{ext}/basic"
                     res = requests.get(basic_url, headers=headers)
@@ -131,27 +132,33 @@ def get_stock_data(query: str):
                     if res.status_code == 200:
                         basic_res = res.json()
                         
-                        # 응답 데이터에 'stockItemTotalInfos' (재무 서랍장)가 있으면 빙고!
                         if 'stockItemTotalInfos' in basic_res:
-                            # 🌟 보너스: '엔비디아' 같은 한글 이름을 가져옵니다!
+                            # 이름은 완벽하게 가져왔으니 그대로 유지!
                             name = basic_res.get('stockName', target_symbol)
                             
-                            # 🌟 핵심 수정: 서랍장을 열고 PBR, PER 글씨가 있는 데이터를 찾아냅니다.
+                            # 서랍장 안의 데이터를 하나씩 확인
                             for info in basic_res.get('stockItemTotalInfos', []):
-                                info_str = str(info).upper()
-                                val_str = str(info.get('value', '')).strip()
+                                key_str = str(info.get('key', '')).upper()
+                                code_str = str(info.get('code', '')).upper()
+                                val_str = str(info.get('value', ''))
+                                
+                                # 🌟 핵심 마법: "73.80배" -> "73.80" 처럼 숫자와 소수점만 남기고 다 지웁니다!
+                                clean_val = re.sub(r'[^\d.]', '', val_str)
                                 
                                 try:
-                                    if 'PBR' in info_str and val_str and val_str != '-':
-                                        pbr = round(float(val_str.replace(',', '')), 2)
-                                    elif 'PER' in info_str and val_str and val_str != '-':
-                                        per = round(float(val_str.replace(',', '')), 2)
-                                except:
-                                    pass # 텍스트 변환 에러가 나도 뻗지 않고 다음 서랍을 뒤집니다.
+                                    # 안전망: 빈 글자나 점(.)만 있는 게 아니면 숫자로 변환
+                                    if clean_val and clean_val != '.':
+                                        if 'PBR' in key_str or 'PBR' in code_str:
+                                            pbr = round(float(clean_val), 2)
+                                        elif 'PER' in key_str or 'PER' in code_str:
+                                            per = round(float(clean_val), 2)
+                                except Exception as e:
+                                    print(f"문자열 변환 에러 무시: {e}")
+                                    pass
                             
-                            break # 데이터를 찾았으니 반복문 탈출!
+                            break # 거래소를 찾았으니 탈출!
                             
-                # ROE 역산!
+                # ROE 역산! (기획의 꽃)
                 if pbr > 0 and per > 0:
                     roe = round((pbr / per) * 100, 2)
                     
