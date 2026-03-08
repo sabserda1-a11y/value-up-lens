@@ -1,8 +1,6 @@
-import os
 import re
-import pandas as pd
 import requests
-from datetime import datetime # 🌟 날짜를 예쁘게 깎기 위해 추가!
+from datetime import datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -16,19 +14,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def load_stock_map():
-    try:
-        df = pd.read_csv('stocks.csv', dtype={'code': str})
-        return df.set_index('name')['code'].to_dict()
-    except:
-        return {}
-
-STOCK_MAP = load_stock_map()
-
 @app.get("/")
 @app.head("/")
 def read_root():
-    return {"status": "alive", "message": "Hybrid Engine (Yahoo Chart + Naver Quant) is running."}
+    return {"status": "alive", "message": "100% Auto Search Global Engine is running."}
 
 @app.get("/api/stock/{query}")
 def get_stock_data(query: str):
@@ -36,23 +25,53 @@ def get_stock_data(query: str):
         query = query.strip()
         is_korean = True
         target_symbol = ""
-
-        if query.isdigit():
-            target_symbol = query.zfill(6)
-        elif query in STOCK_MAP:
-            target_symbol = STOCK_MAP[query].zfill(6)
-        elif re.match(r'^[A-Za-z]+$', query):
-            is_korean = False
-            target_symbol = query.upper()
-        else:
-            return {"detail": f"'{query}' 종목을 찾을 수 없습니다."}
-
+        
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
         }
 
         # ==========================================
-        # 🇰🇷 1. 한국 주식 로직 (기존과 동일)
+        # 🌟 0. 스마트 통합 검색 라우터 (CSV 장부 완전 대체!)
+        # ==========================================
+        if query.isdigit():
+            # 숫자만 치면 한국 주식 코드로 인식
+            is_korean = True
+            target_symbol = query.zfill(6)
+        elif re.match(r'^[A-Za-z]+$', query):
+            # 순수 영어만 치면 미국 주식 티커로 인식 (예: AAPL)
+            is_korean = False
+            target_symbol = query.upper()
+        else:
+            # 한글이나 섞인 글자를 치면 네이버 검색 API에 먼저 물어봅니다! (예: 카카오, 애플)
+            search_url = f"https://m.stock.naver.com/api/search/all?keyword={query}"
+            res = requests.get(search_url, headers=headers)
+            
+            if res.status_code == 200:
+                search_data = res.json()
+                items = search_data.get('searchList', [])
+                
+                if not items:
+                    return {"detail": f"'{query}' 종목을 찾을 수 없습니다. 정확한 이름을 입력해주세요."}
+                
+                # 가장 정확한 첫 번째 검색 결과를 가져옵니다.
+                first_item = items[0]
+                
+                # 네이버가 "이건 해외 주식이야!" 라고 알려주면 미국 주식 로직으로 패스
+                if first_item.get('stockType') == 'worldstock':
+                    is_korean = False
+                    target_symbol = first_item.get('symbolCode', '').upper()
+                else:
+                    # 한국 주식이라면 6자리 코드를 빼옵니다.
+                    is_korean = True
+                    target_symbol = first_item.get('itemCode')
+                    
+                if not target_symbol:
+                    return {"detail": f"'{query}'의 종목 코드를 확인할 수 없습니다."}
+            else:
+                return {"detail": "네이버 검색 서버에 연결할 수 없습니다."}
+
+        # ==========================================
+        # 🇰🇷 1. 한국 주식 로직 (실시간 주가 + 차트 + 퀀트)
         # ==========================================
         if is_korean:
             symbol = target_symbol
@@ -101,7 +120,7 @@ def get_stock_data(query: str):
             roe = 0.0
             current_price = 0
             
-            # 1단계: 차트 데이터 (야후 다이렉트 API - 100% 성공 보장)
+            # 1단계: 차트 데이터 (야후 다이렉트 API)
             chart_url = f"https://query2.finance.yahoo.com/v8/finance/chart/{target_symbol}?interval=1d&range=6mo"
             chart_res = requests.get(chart_url, headers=headers)
             
@@ -117,7 +136,6 @@ def get_stock_data(query: str):
                     
                     for t, c in zip(timestamps, closes):
                         if c is not None:
-                            # 복잡한 타임스탬프를 YYYY-MM-DD 형태로 변환
                             dt = datetime.fromtimestamp(t).strftime('%Y-%m-%d')
                             date_list.append(dt)
                             trend_list.append(round(c, 2))
@@ -130,7 +148,7 @@ def get_stock_data(query: str):
                 trend_list = [0] * 5
                 date_list = ["데이터 없음"] * 5
 
-            # 2단계: 퀀트 데이터 (네이버 해외주식 직통 타격 - 한글 이름 및 PBR/ROE)
+            # 2단계: 퀀트 데이터 (네이버 해외주식 직통 타격)
             for ext in ['.O', '.N', '.A']:
                 basic_url = f"https://api.stock.naver.com/stock/{target_symbol}{ext}/basic"
                 res = requests.get(basic_url, headers=headers)
@@ -142,7 +160,6 @@ def get_stock_data(query: str):
                         reuters_code = f"{target_symbol}{ext}"
                         name = basic_res.get('stockName', target_symbol)
                         
-                        # 혹시 야후 차트가 실패했을 때를 대비한 최후의 보루 가격
                         if current_price == 0:
                             try:
                                 cp_str = str(basic_res.get('closePrice', '0')).replace(',', '')
@@ -150,7 +167,6 @@ def get_stock_data(query: str):
                                 trend_list = [current_price] * 5
                             except: pass
                         
-                        # 🌟 정규식 가위로 PBR/PER 추출!
                         for info in basic_res.get('stockItemTotalInfos', []):
                             key_str = str(info.get('key', '')).upper()
                             val_str = str(info.get('value', ''))
