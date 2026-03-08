@@ -97,12 +97,12 @@ def get_stock_data(query: str):
             }
 
        # ==========================================
-        # 🇺🇸 3. 미국 주식 로직 (야후 차트 + 네이버 해외주식 퀀트)
+        # 🇺🇸 3. 미국 주식 로직 (네이버 직통 타격 + 야후 차트)
         # ==========================================
         else:
             ticker = yf.Ticker(target_symbol)
             
-            # 1. 차트와 현재가 (이건 야후가 차단하지 않으니 그대로 씁니다!)
+            # 1. 차트와 현재가 (야후)
             hist = ticker.history(period="6mo")
             if hist.empty:
                 return {"detail": f"미국 주식 '{target_symbol}' 데이터를 찾을 수 없습니다."}
@@ -114,7 +114,7 @@ def get_stock_data(query: str):
                 date_list.append(date.strftime('%Y-%m-%d'))
                 trend_list.append(round(row['Close'], 2))
 
-            # 2. 퀀트 데이터 추출 (네이버 해외주식 API 활용 - 절대 막히지 않음!)
+            # 2. 퀀트 데이터 (네이버 해외주식 서랍장 직접 열기)
             name = target_symbol
             pbr = 0.0
             per = 0.0
@@ -123,40 +123,42 @@ def get_stock_data(query: str):
             try:
                 headers = {"User-Agent": "Mozilla/5.0"}
                 
-                # 1단계: 네이버에서 NVDA를 검색해서 정확한 해외 종목코드(예: NVDA.O) 찾기
-                search_url = f"https://m.stock.naver.com/api/search/all?keyword={target_symbol}"
-                search_res = requests.get(search_url, headers=headers).json()
-                
-                reuters_code = ""
-                for item in search_res.get('searchList', []):
-                    # 해외 주식(worldstock)이고, 심볼이 일치하면 선택!
-                    if item.get('stockType') == 'worldstock' and item.get('symbolCode', '').upper() == target_symbol:
-                        reuters_code = item.get('reutersCode')
-                        name = item.get('stockName') # 🌟 보너스: '엔비디아', '애플' 같은 한글 이름을 가져옵니다!
-                        break
-                
-                # 2단계: 찾아낸 코드(NVDA.O 등)로 네이버에 재무 데이터 요청하기
-                if reuters_code:
-                    basic_url = f"https://api.stock.naver.com/stock/{reuters_code}/basic"
-                    basic_res = requests.get(basic_url, headers=headers).json()
+                # 1단계: 나스닥(.O), 뉴욕(.N), 아멕스(.A) 거래소를 순서대로 찔러봅니다!
+                for ext in ['.O', '.N', '.A']:
+                    basic_url = f"https://api.stock.naver.com/stock/{target_symbol}{ext}/basic"
+                    res = requests.get(basic_url, headers=headers)
                     
-                    pbr_str = basic_res.get('pbr', '0')
-                    per_str = basic_res.get('per', '0')
+                    if res.status_code == 200:
+                        basic_res = res.json()
+                        
+                        # 응답 데이터에 'stockItemTotalInfos' (재무 서랍장)가 있으면 빙고!
+                        if 'stockItemTotalInfos' in basic_res:
+                            # 🌟 보너스: '엔비디아' 같은 한글 이름을 가져옵니다!
+                            name = basic_res.get('stockName', target_symbol)
+                            
+                            # 🌟 핵심 수정: 서랍장을 열고 PBR, PER 글씨가 있는 데이터를 찾아냅니다.
+                            for info in basic_res.get('stockItemTotalInfos', []):
+                                info_str = str(info).upper()
+                                val_str = str(info.get('value', '')).strip()
+                                
+                                try:
+                                    if 'PBR' in info_str and val_str and val_str != '-':
+                                        pbr = round(float(val_str.replace(',', '')), 2)
+                                    elif 'PER' in info_str and val_str and val_str != '-':
+                                        per = round(float(val_str.replace(',', '')), 2)
+                                except:
+                                    pass # 텍스트 변환 에러가 나도 뻗지 않고 다음 서랍을 뒤집니다.
+                            
+                            break # 데이터를 찾았으니 반복문 탈출!
+                            
+                # ROE 역산!
+                if pbr > 0 and per > 0:
+                    roe = round((pbr / per) * 100, 2)
                     
-                    # 네이버는 데이터가 없으면 '-' 를 주므로 필터링합니다.
-                    if pbr_str and pbr_str != '-':
-                        pbr = round(float(str(pbr_str).replace(',', '')), 2)
-                    if per_str and per_str != '-':
-                        per = round(float(str(per_str).replace(',', '')), 2)
-                        
-                    # ROE 역산!
-                    if pbr > 0 and per > 0:
-                        roe = round((pbr / per) * 100, 2)
-                        
             except Exception as e:
-                print(f"🔥 네이버 글로벌 API 호출 실패: {e}")
+                print(f"🔥 네이버 직통 API 호출 실패: {e}")
                 
-            # 3. 실제 데이터를 기반으로 퀀트 스코어 계산
+            # 3. 퀀트 스코어 계산
             score = 50 
             
             if pbr > 0:
