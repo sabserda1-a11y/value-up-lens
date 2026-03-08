@@ -1,6 +1,6 @@
 import re
 import requests
-import urllib.parse # 🌟 한글을 네이버가 좋아하는 암호(EUC-KR)로 포장하는 도구!
+import urllib.parse
 from datetime import datetime
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -19,7 +19,7 @@ app.add_middleware(
 @app.get("/")
 @app.head("/")
 def read_root():
-    return {"status": "alive", "message": "100% Auto Search (Bypass Engine) is running."}
+    return {"status": "alive", "message": "100% Bulletproof Auto Search Engine is running."}
 
 @app.get("/api/stock/{query}")
 def get_stock_data(query: str):
@@ -30,64 +30,62 @@ def get_stock_data(query: str):
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Referer": "https://finance.naver.com/" # 🌟 나 봇 아니고 진짜 네이버에서 검색하는 거야~ 하고 속이는 신분증
+            "Referer": "https://finance.naver.com/"
         }
 
         # ==========================================
-        # 🌟 0. 스마트 통합 검색 라우터 (EUC-KR 웹 스크래핑 + API 백업 하이브리드)
+        # 🌟 0. 스마트 통합 검색 라우터 (시장 이름 무시, 오직 '코드 모양'으로만 100% 판별!)
         # ==========================================
         if query.isdigit():
             is_korean = True
             target_symbol = query.zfill(6)
-        elif re.match(r'^[A-Za-z]+$', query):
+        elif re.match(r'^[A-Za-z0-9]+$', query): # 영어/숫자 혼합 티커 방어
             is_korean = False
             target_symbol = query.upper()
         else:
-            # 1. 네이버 금융 메인 검색창 스크래핑 (서버 차단 100% 우회 및 EUC-KR 인코딩!)
+            # 1. 자동완성 API 최우선 탐색 (가장 빠름)
+            ac_url = "https://ac.finance.naver.com/ac"
+            params = {'q': query, 'q_enc': 'utf-8', 'st': '111', 'r_format': 'json', 't_koreng': '1'}
             try:
-                # 🌟 핵심 마법: '카카오' -> '%C4%AB%C4%AB%BF%C0' (네이버가 알아듣는 EUC-KR 암호로 변환)
-                euc_kr_query = urllib.parse.quote(query.encode('euc-kr'))
-                search_url = f"https://finance.naver.com/search/searchList.naver?query={euc_kr_query}"
-                res = requests.get(search_url, headers=headers)
-                
-                # 검색이 완벽히 일치해서 종목 페이지로 바로 리다이렉트 된 경우
-                if "item/main.naver?code=" in res.url:
-                    is_korean = True
-                    target_symbol = res.url.split("code=")[-1][:6]
-                else:
-                    # 리스트가 나온 경우 첫 번째 종목 코드 긁어오기
-                    match = re.search(r'/item/main\.naver\?code=(\d{6})', res.text)
-                    if match:
-                        is_korean = True
-                        target_symbol = match.group(1)
+                ac_res = requests.get(ac_url, params=params, headers=headers)
+                if ac_res.status_code == 200:
+                    items = ac_res.json().get('items', [])
+                    for group in items:
+                        for item in group:
+                            if len(item) >= 2:
+                                code_str = str(item[1])
+                                # 🌟 핵심 마법: 시장 이름(유가증권 등) 안 봅니다. 무조건 6자리 숫자면 한국 주식!
+                                if code_str.isdigit() and len(code_str) == 6:
+                                    is_korean = True
+                                    target_symbol = code_str
+                                    break
+                                # 미국 주식은 영어(또는 숫자)와 점(.)으로 구성 (예: AAPL.O)
+                                elif re.match(r'^[A-Za-z0-9\.]+$', code_str) and not code_str.isdigit():
+                                    is_korean = False
+                                    target_symbol = code_str.split('.')[0].upper()
+                                    break
+                        if target_symbol: break
             except Exception as e:
-                print(f"스크래핑 우회 에러: {e}")
+                print(f"API 백업 검색 에러: {e}")
 
-            # 2. 미국 주식을 한글로 쳤거나 (예: 애플), 못 찾았을 때의 최후 백업 API
+            # 2. 웹 스크래핑 백업 (자동완성 실패 시 EUC-KR 우회)
             if not target_symbol:
-                ac_url = "https://ac.finance.naver.com/ac"
-                params = {'q': query, 'q_enc': 'utf-8', 'st': '111', 'r_format': 'json', 't_koreng': '1'}
                 try:
-                    ac_res = requests.get(ac_url, params=params, headers=headers)
-                    if ac_res.status_code == 200:
-                        items = ac_res.json().get('items', [])
-                        for group in items:
-                            for item in group:
-                                if len(item) >= 3:
-                                    market = str(item[2]).upper()
-                                    if market in ['KOSPI', 'KOSDAQ', 'KONEX']:
-                                        is_korean = True
-                                        target_symbol = str(item[1])
-                                        break
-                                    elif market in ['NASDAQ', 'NYSE', 'AMEX', 'NYSEAMEX'] or not str(item[1]).isdigit():
-                                        is_korean = False
-                                        target_symbol = str(item[1]).split('.')[0].upper()
-                                        break
-                            if target_symbol: break
+                    euc_kr_query = urllib.parse.quote(query.encode('euc-kr'))
+                    search_url = f"https://finance.naver.com/search/searchList.naver?query={euc_kr_query}"
+                    res = requests.get(search_url, headers=headers)
+                    
+                    if "item/main.naver?code=" in res.url:
+                        is_korean = True
+                        target_symbol = res.url.split("code=")[-1][:6]
+                    else:
+                        match = re.search(r'/item/main\.naver\?code=(\d{6})', res.text)
+                        if match:
+                            is_korean = True
+                            target_symbol = match.group(1)
                 except Exception as e:
-                    print(f"API 백업 검색 에러: {e}")
+                    print(f"스크래핑 우회 에러: {e}")
 
-        # 찾지 못했을 때의 방어막
         if not target_symbol:
             return JSONResponse(status_code=404, content={"detail": f"'{query}' 종목을 찾을 수 없습니다. 정확한 이름을 입력해주세요."})
 
