@@ -2,6 +2,7 @@ import re
 import requests
 from datetime import datetime
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse # 🌟 에러를 정확히 던지기 위한 새로운 무기!
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
@@ -23,55 +24,57 @@ def read_root():
 def get_stock_data(query: str):
     try:
         query = query.strip()
-        is_korean = True
+        is_korean = None
         target_symbol = ""
         
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
 
         # ==========================================
-        # 🌟 0. 스마트 통합 검색 라우터 (CSV 장부 완전 대체!)
+        # 🌟 0. 스마트 통합 검색 라우터 (네이버 자동완성 API)
         # ==========================================
-        if query.isdigit():
-            # 숫자만 치면 한국 주식 코드로 인식
-            is_korean = True
-            target_symbol = query.zfill(6)
-        elif re.match(r'^[A-Za-z]+$', query):
-            # 순수 영어만 치면 미국 주식 티커로 인식 (예: AAPL)
-            is_korean = False
-            target_symbol = query.upper()
-        else:
-            # 한글이나 섞인 글자를 치면 네이버 검색 API에 먼저 물어봅니다! (예: 카카오, 애플)
-            search_url = f"https://m.stock.naver.com/api/search/all?keyword={query}"
+        search_url = f"https://ac.finance.naver.com/ac?q={query}&q_enc=utf-8&st=111&r_format=json&t_koreng=1"
+        try:
             res = requests.get(search_url, headers=headers)
-            
             if res.status_code == 200:
-                search_data = res.json()
-                items = search_data.get('searchList', [])
+                data = res.json()
+                items = data.get('items', [])
                 
-                if not items:
-                    return {"detail": f"'{query}' 종목을 찾을 수 없습니다. 정확한 이름을 입력해주세요."}
-                
-                # 가장 정확한 첫 번째 검색 결과를 가져옵니다.
-                first_item = items[0]
-                
-                # 네이버가 "이건 해외 주식이야!" 라고 알려주면 미국 주식 로직으로 패스
-                if first_item.get('stockType') == 'worldstock':
-                    is_korean = False
-                    target_symbol = first_item.get('symbolCode', '').upper()
-                else:
-                    # 한국 주식이라면 6자리 코드를 빼옵니다.
-                    is_korean = True
-                    target_symbol = first_item.get('itemCode')
-                    
-                if not target_symbol:
-                    return {"detail": f"'{query}'의 종목 코드를 확인할 수 없습니다."}
+                for group in items:
+                    for item in group:
+                        if len(item) >= 3:
+                            market = str(item[2]).upper()
+                            # 한국 주식
+                            if market in ['KOSPI', 'KOSDAQ', 'KONEX']:
+                                is_korean = True
+                                target_symbol = str(item[1])
+                                break
+                            # 해외 주식
+                            elif market in ['NASDAQ', 'NYSE', 'AMEX', 'NYSEAMEX']:
+                                is_korean = False
+                                target_symbol = str(item[1]).split('.')[0]
+                                break
+                    if target_symbol:
+                        break
+        except Exception as e:
+            print(f"검색 API 에러: {e}")
+            pass
+
+        # 자동완성에서 못 찾았을 경우 백업 (기존 방식)
+        if not target_symbol:
+            if query.isdigit():
+                is_korean = True
+                target_symbol = query.zfill(6)
+            elif re.match(r'^[A-Za-z]+$', query):
+                is_korean = False
+                target_symbol = query.upper()
             else:
-                return {"detail": "네이버 검색 서버에 연결할 수 없습니다."}
+                # 🌟 여기가 핵심! 에러를 200이 아닌 404로 던져야 프론트가 '알수없는 종목'을 띄우지 않고 팝업 경고창을 냅니다!
+                return JSONResponse(status_code=404, content={"detail": f"'{query}' 종목을 찾을 수 없습니다. 정확한 이름을 입력해주세요."})
 
         # ==========================================
-        # 🇰🇷 1. 한국 주식 로직 (실시간 주가 + 차트 + 퀀트)
+        # 🇰🇷 1. 한국 주식 로직
         # ==========================================
         if is_korean:
             symbol = target_symbol
@@ -110,7 +113,7 @@ def get_stock_data(query: str):
             }
 
         # ==========================================
-        # 🇺🇸 2. 미국 주식 로직 (야후 다이렉트 차트 + 네이버 퀀트 지표)
+        # 🇺🇸 2. 미국 주식 로직
         # ==========================================
         else:
             reuters_code = ""
@@ -180,7 +183,7 @@ def get_stock_data(query: str):
                         break 
             
             if not reuters_code and current_price == 0:
-                return {"detail": f"'{target_symbol}' 종목 데이터를 불러올 수 없습니다. 티커를 확인해주세요."}
+                return JSONResponse(status_code=404, content={"detail": f"'{target_symbol}' 종목 데이터를 불러올 수 없습니다. 티커를 확인해주세요."})
                 
             if pbr > 0 and per > 0:
                 roe = round((pbr / per) * 100, 2)
@@ -207,6 +210,7 @@ def get_stock_data(query: str):
             }
 
     except Exception as e:
-        return {"detail": f"서버 내부 에러: {str(e)}"}
+        # 에러 시에도 무조건 500 에러를 명시적으로 반환
+        return JSONResponse(status_code=500, content={"detail": f"서버 내부 에러: {str(e)}"})
         
 # 실행: uvicorn main:app --reload
