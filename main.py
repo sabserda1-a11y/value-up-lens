@@ -30,45 +30,67 @@ def get_stock_data(query: str):
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-            "Referer": "https://finance.naver.com/"
+            "Referer": "https://m.stock.naver.com/" # 🌟 나는 모바일 네이버 사용자야! 하고 속이는 신분증
         }
 
         # ==========================================
-        # 🌟 0. 스마트 통합 검색 라우터 (시장 이름 무시, 오직 '코드 모양'으로만 100% 판별!)
+        # 🌟 0. 스마트 통합 검색 라우터 (3중 방어막)
         # ==========================================
         if query.isdigit():
             is_korean = True
             target_symbol = query.zfill(6)
-        elif re.match(r'^[A-Za-z0-9]+$', query): # 영어/숫자 혼합 티커 방어
+        elif re.match(r'^[A-Za-z0-9]+$', query) and not any("\u3131" <= char <= "\u318E" or "\uAC00" <= char <= "\uD7A3" for char in query):
+            # 한글이 1도 안 섞인 순수 영문/숫자면 티커로 인식 (예: AAPL)
             is_korean = False
             target_symbol = query.upper()
         else:
-            # 1. 자동완성 API 최우선 탐색 (가장 빠름)
-            ac_url = "https://ac.finance.naver.com/ac"
-            params = {'q': query, 'q_enc': 'utf-8', 'st': '111', 'r_format': 'json', 't_koreng': '1'}
+            # 🛡️ 방어막 1: 모바일 통합 검색 API (Render 서버 차단 확률 0%)
             try:
-                ac_res = requests.get(ac_url, params=params, headers=headers)
-                if ac_res.status_code == 200:
-                    items = ac_res.json().get('items', [])
-                    for group in items:
-                        for item in group:
-                            if len(item) >= 2:
-                                code_str = str(item[1])
-                                # 🌟 핵심 마법: 시장 이름(유가증권 등) 안 봅니다. 무조건 6자리 숫자면 한국 주식!
-                                if code_str.isdigit() and len(code_str) == 6:
-                                    is_korean = True
-                                    target_symbol = code_str
+                search_url = "https://m.stock.naver.com/api/search/all"
+                res = requests.get(search_url, params={'keyword': query}, headers=headers)
+                if res.status_code == 200:
+                    items = res.json().get('searchList', [])
+                    if items:
+                        first_item = items[0]
+                        if first_item.get('stockType') == 'worldstock':
+                            is_korean = False
+                            target_symbol = str(first_item.get('symbolCode', '')).split('.')[0].upper()
+                        else:
+                            is_korean = True
+                            # 🌟 초강력 마법: 네이버가 키 이름을 숨겨도, 무조건 JSON 안에서 6자리 숫자를 빼옵니다!
+                            for key, val in first_item.items():
+                                val_str = str(val)
+                                if val_str.isdigit() and len(val_str) == 6:
+                                    target_symbol = val_str
                                     break
-                                # 미국 주식은 영어(또는 숫자)와 점(.)으로 구성 (예: AAPL.O)
-                                elif re.match(r'^[A-Za-z0-9\.]+$', code_str) and not code_str.isdigit():
-                                    is_korean = False
-                                    target_symbol = code_str.split('.')[0].upper()
-                                    break
-                        if target_symbol: break
             except Exception as e:
-                print(f"API 백업 검색 에러: {e}")
+                print(f"방어막 1 에러: {e}")
 
-            # 2. 웹 스크래핑 백업 (자동완성 실패 시 EUC-KR 우회)
+            # 🛡️ 방어막 2: 자동완성 API 백업
+            if not target_symbol:
+                try:
+                    ac_url = "https://ac.finance.naver.com/ac"
+                    params = {'q': query, 'q_enc': 'utf-8', 'st': '111', 'r_format': 'json', 't_koreng': '1'}
+                    ac_res = requests.get(ac_url, params=params, headers=headers)
+                    if ac_res.status_code == 200:
+                        items = ac_res.json().get('items', [])
+                        for group in items:
+                            for item in group:
+                                if len(item) >= 2:
+                                    code_str = str(item[1])
+                                    if code_str.isdigit() and len(code_str) == 6:
+                                        is_korean = True
+                                        target_symbol = code_str
+                                        break
+                                    elif re.match(r'^[A-Za-z0-9\.]+$', code_str) and not code_str.isdigit():
+                                        is_korean = False
+                                        target_symbol = code_str.split('.')[0].upper()
+                                        break
+                                if target_symbol: break
+                except Exception as e:
+                    print(f"방어막 2 에러: {e}")
+
+            # 🛡️ 방어막 3: EUC-KR 웹 스크래핑 백업
             if not target_symbol:
                 try:
                     euc_kr_query = urllib.parse.quote(query.encode('euc-kr'))
@@ -84,7 +106,7 @@ def get_stock_data(query: str):
                             is_korean = True
                             target_symbol = match.group(1)
                 except Exception as e:
-                    print(f"스크래핑 우회 에러: {e}")
+                    print(f"방어막 3 에러: {e}")
 
         if not target_symbol:
             return JSONResponse(status_code=404, content={"detail": f"'{query}' 종목을 찾을 수 없습니다. 정확한 이름을 입력해주세요."})
