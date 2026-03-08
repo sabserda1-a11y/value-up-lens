@@ -191,8 +191,6 @@ def get_stock_data(query: str):
                 "dates": date_list
             }
 
-    except Exception as e:
-        return {"detail": f"서버 내부 에러: {str(e)}"}
 
     except Exception as e:
         return {"detail": f"서버 내부 에러: {str(e)}"}
