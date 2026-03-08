@@ -97,12 +97,12 @@ def get_stock_data(query: str):
             }
 
        # ==========================================
-        # 🇺🇸 3. 미국 주식 로직 (야후 차트 + Finviz 퀀트 데이터 결합)
+        # 🇺🇸 3. 미국 주식 로직 (야후 모바일 위젯 API + ROE 역산)
         # ==========================================
         else:
             ticker = yf.Ticker(target_symbol)
             
-            # 1. 차트와 현재가 (야후의 history는 잘 작동하므로 그대로 씁니다)
+            # 1. 차트와 현재가 (야후 history API는 차단이 거의 없습니다)
             hist = ticker.history(period="6mo")
             if hist.empty:
                 return {"detail": f"미국 주식 '{target_symbol}' 데이터를 찾을 수 없습니다."}
@@ -114,37 +114,36 @@ def get_stock_data(query: str):
                 date_list.append(date.strftime('%Y-%m-%d'))
                 trend_list.append(round(row['Close'], 2))
 
-            # 2. 진짜 퀀트 데이터 추출 (Finviz 사이트 정면 돌파!)
+            # 2. 퀀트 데이터 추출 (차단율이 0%에 가까운 야후 모바일 v7 API 사용!)
             name = target_symbol
             pbr = 0.0
+            per = 0.0
             roe = 0.0
             
             try:
                 headers = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
                 }
-                # 핀비즈(Finviz) 사이트 주소
-                finviz_url = f"https://finviz.com/quote.ashx?t={target_symbol}"
-                html = requests.get(finviz_url, headers=headers).text
+                # 야후 모바일 위젯이나 아이폰 기본 주식 앱이 사용하는 아주 가벼운 주소
+                v7_url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={target_symbol}"
                 
-                # HTML 텍스트에서 P/B (PBR) 값 오려내기
-                if 'P/B</td>' in html:
-                    try:
-                        pb_str = html.split('P/B</td>')[1].split('<b>')[1].split('</b>')[0]
-                        if pb_str != '-': # 데이터가 없는 경우 방어
-                            pbr = float(pb_str)
-                    except: pass
+                res = requests.get(v7_url, headers=headers)
+                data = res.json()
                 
-                # HTML 텍스트에서 ROE 값 오려내기
-                if 'ROE</td>' in html:
-                    try:
-                        roe_str = html.split('ROE</td>')[1].split('<b>')[1].split('</b>')[0].replace('%', '')
-                        if roe_str != '-':
-                            roe = float(roe_str)
-                    except: pass
+                # 데이터가 정상적으로 왔는지 확인
+                if "quoteResponse" in data and data["quoteResponse"]["result"]:
+                    quote = data["quoteResponse"]["result"][0]
                     
+                    name = quote.get("shortName", target_symbol)
+                    pbr = round(quote.get("priceToBook", 0.0), 2)
+                    per = quote.get("trailingPE", 0.0)
+                    
+                    # 🌟 기획의 승리: 한국 주식과 동일하게 PBR과 PER로 ROE를 역산합니다!
+                    if pbr > 0 and per > 0:
+                        roe = round((pbr / per) * 100, 2)
+                        
             except Exception as e:
-                print(f"🔥 Finviz 퀀트 데이터 스크래핑 실패: {e}")
+                print(f"🔥 야후 v7 API 호출 실패: {e}")
                 
             # 3. 실제 데이터를 기반으로 퀀트 스코어 계산
             score = 50 
