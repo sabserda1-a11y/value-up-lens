@@ -16,20 +16,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 🌟 유명 해외 주식 초고속 번역기
-US_ALIASES = {
-    '애플': 'AAPL', '테슬라': 'TSLA', '엔비디아': 'NVDA', '마이크로소프트': 'MSFT', '마소': 'MSFT',
-    '아마존': 'AMZN', '구글': 'GOOGL', '알파벳': 'GOOGL', '메타': 'META', '페이스북': 'META',
-    '넷플릭스': 'NFLX', 'AMD': 'AMD', '인텔': 'INTC', 'TSMC': 'TSM', '퀄컴': 'QCOM',
-    '팔란티어': 'PLTR', '스타벅스': 'SBUX', '코카콜라': 'KO', '펩시': 'PEP', '디즈니': 'DIS',
-    '버크셔해서웨이': 'BRK.B', '브로드컴': 'AVGO', 'ASML': 'ASML', '일라이릴리': 'LLY', 
-    '노보노디스크': 'NVO', '마이크론': 'MU', '쿠팡': 'CPNG', '코인베이스': 'COIN', '로블록스': 'RBLX'
-}
-
 @app.get("/")
 @app.head("/")
 def read_root():
-    return {"status": "alive", "message": "Daum Finance Master Engine is running."}
+    return {"status": "alive", "message": "TradingView Global Search Engine is running."}
 
 @app.get("/api/stock/{query}")
 def get_stock_data(query: str):
@@ -43,69 +33,66 @@ def get_stock_data(query: str):
         }
 
         # ==========================================
-        # 🌟 절대 막히지 않는 스마트 라우터 (Daum 금융 메인!)
+        # 🌟 1. 절대 막히지 않는 글로벌 검색 라우터
         # ==========================================
         if query.isdigit():
             is_korean = True
             target_symbol = query.zfill(6)
-        elif query in US_ALIASES:
-            is_korean = False
-            target_symbol = US_ALIASES[query]
         elif re.match(r'^[A-Za-z0-9\.]+$', query) and not any("\u3131" <= char <= "\u318E" or "\uAC00" <= char <= "\uD7A3" for char in query):
             is_korean = False
             target_symbol = query.upper()
         else:
-            # 🚀 1단 로켓: 다음(Daum) 금융 검색 API (외국 클라우드 IP 차단 없음!)
+            # 🚀 메인 로켓: 트레이딩뷰(TradingView) 심볼 검색 API
+            # - 장점: 전 세계 1위, 한국어 지원(파마리서치, 애플 등), 미국 IP 절대 차단 안 함!
             try:
-                daum_url = f"https://finance.daum.net/api/search/autocomplete?q={urllib.parse.quote(query)}"
-                # 💡 핵심 마법: 다음 금융은 이 Referer 신분증이 있어야만 문을 열어줍니다!
-                daum_headers = {
+                tv_url = f"https://symbol-search.tradingview.com/symbol_search/v3/?text={urllib.parse.quote(query)}&hl=1&lang=ko&type=stock"
+                tv_headers = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-                    "Referer": "https://finance.daum.net/"
+                    "Origin": "https://kr.tradingview.com",
+                    "Referer": "https://kr.tradingview.com/"
                 }
-                daum_res = requests.get(daum_url, headers=daum_headers)
+                tv_res = requests.get(tv_url, headers=tv_headers)
                 
-                if daum_res.status_code == 200:
-                    data = daum_res.json()
-                    stocks = data.get("stock", [])
-                    foreign_stocks = data.get("foreignStock", [])
-                    
-                    # 한국 주식에서 찾았을 때 (예: 파마리서치 -> A214450)
-                    if stocks:
-                        code = str(stocks[0].get("symbolCode", ""))
-                        if code.startswith("A") and len(code) == 7:
+                if tv_res.status_code == 200:
+                    symbols = tv_res.json().get('symbols', [])
+                    if symbols:
+                        first_match = symbols[0]
+                        sym = str(first_match.get('symbol', ''))
+                        country = first_match.get('country', '')
+                        
+                        if country == 'KR' and sym.isdigit():
                             is_korean = True
-                            target_symbol = code[1:] # A 떼고 214450만 쏙!
-                    # 해외 주식에서 찾았을 때
-                    elif foreign_stocks:
-                        is_korean = False
-                        target_symbol = str(foreign_stocks[0].get("symbolCode", "")).upper()
+                            target_symbol = sym.zfill(6)
+                        elif country == 'US':
+                            is_korean = False
+                            target_symbol = sym
             except Exception as e:
-                print(f"Daum API 에러: {e}")
+                print(f"TradingView API 에러: {e}")
 
-            # 🚀 2단 로켓: 야후 파이낸스 글로벌 (만약의 사태를 대비한 백업)
+            # 🚀 백업 로켓: 네이버 '통합 메인 검색' 스크래핑
+            # - 금융 API는 막혀도, 국민 모두가 쓰는 '네이버 메인 검색창'은 구글봇 등 때문에 함부로 차단 못 함!
             if not target_symbol:
                 try:
-                    yh_url = f"https://query2.finance.yahoo.com/v1/finance/search?q={urllib.parse.quote(query)}"
-                    yh_res = requests.get(yh_url, headers=headers)
-                    if yh_res.status_code == 200:
-                        for q in yh_res.json().get('quotes', []):
-                            sym = str(q.get('symbol', ''))
-                            if sym.endswith('.KS') or sym.endswith('.KQ'):
-                                is_korean = True
-                                target_symbol = sym.split('.')[0]
-                                break
-                            elif re.match(r'^[A-Z]+$', sym):
-                                is_korean = False
-                                target_symbol = sym
-                                break
-                except: pass
+                    search_url = f"https://m.search.naver.com/search.naver?query={urllib.parse.quote(query + ' 주가')}"
+                    res = requests.get(search_url, headers=headers)
+                    # 검색 결과에서 모바일 증권 링크(m.stock.naver.com/.../123456)만 정교하게 빼오기
+                    match = re.search(r'm\.stock\.naver\.com/(?:domestic|world)/stock/([A-Za-z0-9\.]+)', res.text)
+                    if match:
+                        code = match.group(1)
+                        if code.isdigit():
+                            is_korean = True
+                            target_symbol = code
+                        else:
+                            is_korean = False
+                            target_symbol = code.split('.')[0]
+                except Exception as e:
+                    print(f"Naver Main Search 에러: {e}")
 
         if not target_symbol:
             return JSONResponse(status_code=404, content={"detail": f"'{query}' 종목을 찾을 수 없습니다. 정확한 이름을 입력해주세요."})
 
         # ==========================================
-        # 🇰🇷 한국 주식 로직 (데이터 통신은 네이버가 최고!)
+        # 🇰🇷 2. 한국 주식 로직 (데이터 서버는 차단 안 됨)
         # ==========================================
         if is_korean:
             symbol = target_symbol
@@ -144,7 +131,7 @@ def get_stock_data(query: str):
             }
 
         # ==========================================
-        # 🇺🇸 미국 주식 로직
+        # 🇺🇸 3. 미국 주식 로직 (데이터 서버는 차단 안 됨)
         # ==========================================
         else:
             reuters_code = ""
