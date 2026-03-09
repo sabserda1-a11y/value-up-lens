@@ -43,7 +43,13 @@
                 <div class="flex justify-between items-start mb-6">
                     <div>
                         <h2 id="displayStockName" class="text-2xl font-bold text-gray-800">대기 중...</h2>
-                        <p id="displayPrice" class="text-4xl font-extrabold tracking-tight mt-2">-</p>
+                        <div class="flex items-baseline gap-3 mt-2">
+                            <p id="displayPrice" class="text-4xl font-extrabold tracking-tight">-</p>
+                            <div id="priceChangeInfo" class="text-sm font-bold hidden items-baseline gap-1">
+                                <span id="prevPriceText" class="text-gray-400 line-through text-xs font-medium"></span>
+                                <span id="changePercentText" class="px-2 py-0.5 rounded-md"></span>
+                            </div>
+                        </div>
                     </div>
                     <div class="text-right">
                         <div id="signalLight" class="inline-block px-4 py-1 rounded-full text-xs font-black mb-2 bg-gray-100 text-gray-400">분석 전</div>
@@ -160,6 +166,10 @@
             overlay.classList.add('flex');
             const msgInterval = rotateMessages();
 
+            // 🌟 분석을 시작할 때 이전 등락률 정보를 숨깁니다.
+            document.getElementById('priceChangeInfo').classList.add('hidden');
+            document.getElementById('priceChangeInfo').classList.remove('flex');
+
             try {
                 isCoolingDown = true;
                 btn.disabled = true;
@@ -183,10 +193,44 @@
                 document.getElementById('statRoe').innerText = data.roe ? data.roe + " %" : "N/A";
                 document.getElementById('valueScore').innerText = data.score || 50;
 
+                // 🌟 등락률(%) 계산 로직 추가!
+                if (data.trend && data.trend.length >= 2 && data.price) {
+                    // 현재가 (콤마 제거 후 숫자로 변환)
+                    const currentPriceNum = parseFloat(String(data.price).replace(/,/g, ''));
+                    // 어제(이전) 가격은 트렌드 차트의 끝에서 두 번째 값!
+                    const prevPriceNum = data.trend[data.trend.length - 2];
+                    
+                    if (prevPriceNum > 0) {
+                        const changePercent = ((currentPriceNum - prevPriceNum) / prevPriceNum) * 100;
+                        const changeInfoDiv = document.getElementById('priceChangeInfo');
+                        const prevTextEl = document.getElementById('prevPriceText');
+                        const percentTextEl = document.getElementById('changePercentText');
+                        
+                        // 어제 가격 표시
+                        prevTextEl.innerText = prevPriceNum.toLocaleString() + currency;
+                        
+                        // 상승(빨강), 하락(파랑), 보합(회색) 처리 (한국 증시 기준)
+                        if (changePercent > 0) {
+                            percentTextEl.innerText = `▲ ${changePercent.toFixed(2)}%`;
+                            percentTextEl.className = "px-2 py-0.5 rounded-md bg-red-100 text-red-600";
+                        } else if (changePercent < 0) {
+                            percentTextEl.innerText = `▼ ${Math.abs(changePercent).toFixed(2)}%`;
+                            percentTextEl.className = "px-2 py-0.5 rounded-md bg-blue-100 text-blue-600";
+                        } else {
+                            percentTextEl.innerText = `- 0.00%`;
+                            percentTextEl.className = "px-2 py-0.5 rounded-md bg-gray-100 text-gray-600";
+                        }
+                        
+                        // 정보 영역 보이기
+                        changeInfoDiv.classList.remove('hidden');
+                        changeInfoDiv.classList.add('flex');
+                    }
+                }
+
                 updateChart(data.trend, data.dates, currency);
                 updateGuideByScore(data.score, data.name);
                 
-                // 🌟 핵심 연결: 검색이 성공하면 무조건 내 랭킹에 저장합니다!
+                // 내 랭킹에 저장
                 saveToMyRanking(data);
 
             } catch (error) {
@@ -292,10 +336,14 @@
             let history = JSON.parse(localStorage.getItem('myRanking')) || [];
             const container = document.getElementById('myRankingList');
             if (history.length === 0) return;
+            
+            // 🌟 신규 적용: 내 랭킹 리스트도 클릭 시 해당 종목으로 바로 분석 실행!
             container.innerHTML = history.map((item, index) => `
-                <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
-                    <span><strong class="text-gray-800">${index + 1}. ${item.name}</strong> <span class="text-xs text-gray-400 ml-1">(PBR ${item.pbr})</span></span>
-                    <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-md font-bold text-xs">${item.score}점</span>
+                <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0 group">
+                    <span class="cursor-pointer group-hover:text-indigo-600 transition" onclick="document.getElementById('stockSearch').value='${item.name}'; updateStock();">
+                        <strong class="text-gray-800 group-hover:text-indigo-600">${index + 1}. ${item.name}</strong> <span class="text-xs text-gray-400 ml-1">(PBR ${item.pbr})</span>
+                    </span>
+                    <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-md font-bold text-xs shadow-sm">${item.score}점</span>
                 </div>
             `).join('');
         }
@@ -307,9 +355,8 @@
             btn.innerText = '가져오는 중...⏳';
             btn.disabled = true;
             btn.classList.add('opacity-50', 'cursor-not-allowed');
-            container.innerHTML = '<div class="text-center py-4 text-gray-400">우량주 데이터를 분석 중입니다...</div>';
+            container.innerHTML = '<div class="text-center py-4 text-gray-400 animate-pulse">우량주 데이터를 분석 중입니다...</div>';
 
-            // 💡 기획자가 미리 찍어둔 우량주 5개! (미국 주식도 가능합니다)
             const picks = ['KB금융', '기아', '현대차', '신한지주', '애플'];
             let results = [];
 
@@ -326,11 +373,11 @@
             results.sort((a, b) => b.score - a.score);
 
             container.innerHTML = results.map((item, index) => `
-                <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
-                    <span class="cursor-pointer hover:text-indigo-600 transition" onclick="document.getElementById('stockSearch').value='${item.name}'; updateStock();">
-                        <strong class="text-gray-800">${index + 1}. ${item.name}</strong> <span class="text-xs text-gray-400 ml-1">(ROE ${item.roe}%)</span>
+                <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0 group">
+                    <span class="cursor-pointer group-hover:text-emerald-600 transition" onclick="document.getElementById('stockSearch').value='${item.name}'; updateStock();">
+                        <strong class="text-gray-800 group-hover:text-emerald-600">${index + 1}. ${item.name}</strong> <span class="text-xs text-gray-400 ml-1">(ROE ${item.roe}%)</span>
                     </span>
-                    <span class="bg-emerald-100 text-emerald-800 px-2 py-1 rounded-md font-bold text-xs">${item.score}점</span>
+                    <span class="bg-emerald-100 text-emerald-800 px-2 py-1 rounded-md font-bold text-xs shadow-sm">${item.score}점</span>
                 </div>
             `).join('');
             
@@ -343,7 +390,7 @@
                 if (e.key === 'Enter') updateStock();
             });
 
-            renderMyRanking(); // 화면 켜질 때 내 랭킹 불러오기
+            renderMyRanking(); 
 
             const urlParams = new URLSearchParams(window.location.search);
             const codeFromUrl = urlParams.get('code');
@@ -351,7 +398,7 @@
             if (codeFromUrl) {
                 document.getElementById('stockSearch').value = codeFromUrl;
             } else {
-                document.getElementById('stockSearch').value = "삼성전자"; // 기본값을 친숙한 삼성전자로 변경!
+                document.getElementById('stockSearch').value = "삼성전자";
             }
             updateStock();
         };
