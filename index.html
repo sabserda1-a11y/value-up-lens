@@ -19,6 +19,11 @@
             background-color: #f1f5f9; 
             padding: 20px; 
         }
+        /* 스크롤바 예쁘게 깎기 */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
 <body>
@@ -135,21 +140,23 @@
             <div class="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
                 <h3 class="text-lg font-bold text-indigo-900 mb-1">🥇 나의 관심종목 랭킹</h3>
                 <p class="text-xs text-gray-500 mb-4">내가 검색했던 종목들의 점수 순위입니다.</p>
-                <div id="myRankingList" class="text-sm text-gray-600 space-y-2">
+                <div id="myRankingList" class="text-sm text-gray-600 space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
                     검색 기록이 없습니다. 먼저 주식을 검색해보세요!
                 </div>
             </div>
 
-            <div class="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+            <div class="flex-[1.5] bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
                 <div class="flex justify-between items-center mb-1">
-                    <h3 class="text-lg font-bold text-emerald-700">⭐ 오늘의 추천 밸류업</h3>
-                    <button onclick="loadTop5()" id="top5Btn" class="text-xs px-3 py-1.5 bg-emerald-500 text-white rounded-lg font-bold hover:bg-emerald-600 transition">
-                        추천종목 불러오기
+                    <h3 class="text-lg font-bold text-emerald-700">🔭 실시간 밸류업 스캐너 (Top 30)</h3>
+                    <button onclick="runScanner()" id="scannerBtn" class="text-xs px-3 py-1.5 bg-emerald-500 text-white rounded-lg font-bold hover:bg-emerald-600 transition">
+                        실시간 스캔 시작
                     </button>
                 </div>
-                <p class="text-xs text-gray-500 mb-4">저평가 우량주 5개를 실시간으로 분석합니다.</p>
-                <div id="top5List" class="text-sm text-gray-600 space-y-2">
-                    버튼을 눌러 추천 종목을 확인하세요!
+                <p class="text-xs text-gray-500 mb-4">기획자가 선정한 글로벌 우량주 30개의 실시간 밸류업 순위를 스캔합니다.</p>
+                <div id="scannerList" class="text-sm text-gray-600 space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                    <div class="text-center py-10 text-gray-400">
+                        우측 상단의 <strong class="text-emerald-500">스캔 시작</strong> 버튼을 눌러주세요!
+                    </div>
                 </div>
             </div>
         </div>
@@ -185,9 +192,7 @@
             }, 3000);
         }
 
-        // 🌟 내역 분해 및 툴팁 텍스트 생성기
         function getScoreTooltipText(score, pbr, per, roe) {
-            // 1. 등급 코멘트
             let title = "";
             if (score >= 90) title = "🔥 90점 이상: 만점에 가까운 완벽한 주식!";
             else if (score >= 80) title = "💎 80점 이상: 초특급 저평가 우량주";
@@ -197,7 +202,6 @@
             else if (score >= 40) title = "⚠️ 40점 이상: 다소 고평가 또는 수익성 부진";
             else title = "🚨 40점 미만: 심각한 고평가 또는 적자 상태 (주의)";
 
-            // 2. 점수 계산 내역 역추적 (백엔드와 동일 로직)
             let pbrScore = 0, perScore = 0, roeScore = 0;
             
             if (pbr > 0) {
@@ -223,12 +227,10 @@
                 roeScore = -15;
             }
 
-            // 부호 표시 정리
             const pbrSign = pbrScore >= 0 ? `+${pbrScore}` : `${pbrScore}`;
             const perSign = perScore >= 0 ? `+${perScore}` : `${perScore}`;
             const roeSign = roeScore >= 0 ? `+${roeScore}` : `${roeScore}`;
 
-            // HTML 형태로 반환
             return `
                 <div class="text-center mb-2 text-sm text-yellow-300">${title}</div>
                 <div class="bg-gray-800 p-2 rounded-lg text-left text-gray-300 font-mono text-[11px] leading-relaxed">
@@ -285,7 +287,6 @@
                 const data = await response.json();
                 const currency = data.currency || "원";
 
-                // UI 업데이트
                 document.getElementById('displayStockName').innerText = data.name || "알 수 없는 종목";
                 document.getElementById('displayPrice').innerText = (data.price || "0") + " " + currency;
                 document.getElementById('statPbr').innerText = data.pbr ? data.pbr + " 배" : "N/A";
@@ -295,7 +296,6 @@
                 const finalScore = data.score || 50;
                 document.getElementById('valueScore').innerText = finalScore;
                 
-                // 🌟 툴팁에 점수 내역 분해해서 넣기 (innerHTML 사용)
                 document.getElementById('scoreTooltip').innerHTML = getScoreTooltipText(finalScore, data.pbr, data.per, data.roe);
 
                 if (data.trend && data.trend.length >= 2 && data.price) {
@@ -425,7 +425,7 @@
             history = history.filter(item => item.name !== data.name);
             history.push({ name: data.name, score: data.score, pbr: data.pbr, roe: data.roe });
             history.sort((a, b) => b.score - a.score);
-            if (history.length > 10) history = history.slice(0, 10);
+            if (history.length > 30) history = history.slice(0, 30); // 🌟 내 랭킹도 30개까지 기억
             localStorage.setItem('myRanking', JSON.stringify(history));
             renderMyRanking();
         }
@@ -436,28 +436,53 @@
             if (history.length === 0) return;
             
             container.innerHTML = history.map((item, index) => `
-                <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0 group">
-                    <span class="cursor-pointer group-hover:text-indigo-600 transition" onclick="document.getElementById('stockSearch').value='${item.name}'; updateStock();">
-                        <strong class="text-gray-800 group-hover:text-indigo-600">${index + 1}. ${item.name}</strong> <span class="text-xs text-gray-400 ml-1">(PBR ${item.pbr})</span>
+                <div class="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0 group">
+                    <span class="cursor-pointer group-hover:text-indigo-600 transition flex items-center gap-2" onclick="document.getElementById('stockSearch').value='${item.name}'; updateStock();">
+                        <span class="w-4 text-center text-xs font-bold text-gray-400">${index + 1}</span>
+                        <strong class="text-gray-800 group-hover:text-indigo-600">${item.name}</strong> 
                     </span>
-                    <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-md font-bold text-xs shadow-sm">${item.score}점</span>
+                    <span class="bg-indigo-50 text-indigo-700 px-2 py-1 rounded-md font-bold text-xs shadow-sm">${item.score}점</span>
                 </div>
             `).join('');
         }
 
-        async function loadTop5() {
-            const btn = document.getElementById('top5Btn');
-            const container = document.getElementById('top5List');
+        // ==========================================
+        // 🌟 대망의 실시간 스캐너 기능 (Top 30 우량주)
+        // ==========================================
+        async function runScanner() {
+            const btn = document.getElementById('scannerBtn');
+            const container = document.getElementById('scannerList');
             
-            btn.innerText = '가져오는 중...⏳';
             btn.disabled = true;
             btn.classList.add('opacity-50', 'cursor-not-allowed');
-            container.innerHTML = '<div class="text-center py-4 text-gray-400 animate-pulse">우량주 데이터를 분석 중입니다...</div>';
+            
+            // 💡 기획자가 엄선한 30개의 밸류업 유니버스 (한국/미국 혼합)
+            const universe = [
+                '삼성전자', 'SK하이닉스', '현대차', '기아', 'KB금융',
+                '신한지주', '하나금융지주', '메리츠금융지주', '삼성물산', 'POSCO홀딩스',
+                'LG화학', '현대모비스', '한국전력', 'SK텔레콤', 'KT',
+                '기업은행', 'HMM', '삼성화재', '대한항공', '엔씨소프트',
+                '애플', '마이크로소프트', '구글', '아마존', '메타',
+                '테슬라', '엔비디아', '버크셔해서웨이', 'TSMC', '일라이릴리'
+            ];
 
-            const picks = ['KB금융', '기아', '현대차', '신한지주', '애플'];
             let results = [];
 
-            for (let query of picks) {
+            // 스캔 진행 상황을 보여줄 UI
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-10 space-y-4">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+                    <div id="scanStatus" class="text-emerald-600 font-bold animate-pulse">엔진 예열 중...</div>
+                </div>
+            `;
+            const statusEl = document.getElementById('scanStatus');
+
+            // 30개를 순차적으로 찔러서 데이터 가져오기
+            for (let i = 0; i < universe.length; i++) {
+                const query = universe[i];
+                btn.innerText = `스캔 중... (${i+1}/${universe.length})`;
+                if (statusEl) statusEl.innerText = `[${i+1}/${universe.length}] '${query}' 재무 데이터 분석 중 🔍`;
+
                 try {
                     let res = await fetch(`https://value-up-lens.onrender.com/api/stock/${encodeURIComponent(query)}`);
                     if (res.ok) {
@@ -467,18 +492,29 @@
                 } catch (e) { console.log(e); }
             }
 
+            // 점수가 높은 순으로 정렬
             results.sort((a, b) => b.score - a.score);
 
-            container.innerHTML = results.map((item, index) => `
-                <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0 group">
-                    <span class="cursor-pointer group-hover:text-emerald-600 transition" onclick="document.getElementById('stockSearch').value='${item.name}'; updateStock();">
-                        <strong class="text-gray-800 group-hover:text-emerald-600">${index + 1}. ${item.name}</strong> <span class="text-xs text-gray-400 ml-1">(ROE ${item.roe}%)</span>
+            // 화면에 렌더링 (1,2,3등은 예쁜 메달 아이콘!)
+            container.innerHTML = results.map((item, index) => {
+                let rankIcon = index + 1;
+                if (index === 0) rankIcon = '🥇';
+                if (index === 1) rankIcon = '🥈';
+                if (index === 2) rankIcon = '🥉';
+
+                return `
+                <div class="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0 group">
+                    <span class="cursor-pointer group-hover:text-emerald-600 transition flex items-center gap-2" onclick="document.getElementById('stockSearch').value='${item.name}'; updateStock();">
+                        <span class="w-5 text-center font-bold text-gray-400">${rankIcon}</span>
+                        <strong class="text-gray-800 group-hover:text-emerald-600">${item.name}</strong> 
+                        <span class="text-xs text-gray-400 hidden sm:inline">(PER ${item.per})</span>
                     </span>
-                    <span class="bg-emerald-100 text-emerald-800 px-2 py-1 rounded-md font-bold text-xs shadow-sm">${item.score}점</span>
+                    <span class="bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-md font-bold text-xs shadow-sm">${item.score}점</span>
                 </div>
-            `).join('');
+                `;
+            }).join('');
             
-            btn.innerText = '업데이트 완료';
+            btn.innerText = '스캐너 재실행';
             btn.classList.remove('opacity-50', 'cursor-not-allowed');
         }
 
