@@ -105,6 +105,22 @@
                     <h3 class="font-bold text-indigo-900 mb-3 text-sm">리코더의 최종 전략</h3>
                     <p id="recorderGuide" class="text-sm text-indigo-700 leading-relaxed">종목 코드를 입력하고 분석하기를 눌러주세요.</p>
                 </div>
+
+                <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+                    <h3 class="font-bold text-gray-800 text-sm flex items-center justify-between cursor-pointer select-none" onclick="document.getElementById('scoreGuideDetail').classList.toggle('hidden')">
+                        <span>🏆 리코더 밸류업 등급표</span>
+                        <span class="text-xs bg-gray-100 px-2 py-1 rounded-md text-gray-500 hover:bg-gray-200 transition">열기/닫기 ▼</span>
+                    </h3>
+                    <div id="scoreGuideDetail" class="hidden text-xs text-gray-600 space-y-2 mt-4 pt-3 border-t border-gray-100 leading-relaxed">
+                        <p><span class="font-bold text-red-500">🔥 90점 이상:</span> 만점에 가까운 완벽한 주식</p>
+                        <p><span class="font-bold text-orange-500">💎 80점 이상:</span> 초특급 저평가 우량주</p>
+                        <p><span class="font-bold text-yellow-500">✨ 75점 이상:</span> 매력적인 저평가 우량주</p>
+                        <p><span class="font-bold text-green-500">👍 60점 이상:</span> 펀더멘탈이 양호한 가치주</p>
+                        <p><span class="font-bold text-blue-500">⚖️ 50점 이상:</span> 적정 가치 수준 (관망)</p>
+                        <p><span class="font-bold text-gray-500">⚠️ 40점 이상:</span> 다소 고평가 또는 수익성 부진</p>
+                        <p><span class="font-bold text-gray-800">🚨 40점 미만:</span> 심각한 고평가 또는 적자 상태</p>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -135,9 +151,9 @@
                 </div>
 
                 <div id="categoryArea" class="hidden flex-col flex-1">
-                    <p class="text-xs text-gray-500 mb-3">관심 있는 섹터(테마)를 선택하면 관련 우량주를 모아볼 수 있습니다.</p>
-                    <div id="categoryPills" class="flex flex-wrap gap-2 mb-4"></div>
-                    <div id="categoryStockList" class="text-sm text-gray-600 space-y-2 flex-1 max-h-[250px] overflow-y-auto custom-scrollbar pr-2 border-t border-gray-100 pt-3">
+                    <p class="text-xs text-gray-500 mb-3">관심 있는 테마를 클릭하면, 해당 테마의 우량주들이 <strong>실시간 점수 순</strong>으로 랭크됩니다.</p>
+                    <div id="categoryPills" class="flex flex-wrap gap-2 mb-4 pb-2 border-b border-gray-100"></div>
+                    <div id="categoryStockList" class="text-sm text-gray-600 space-y-2 flex-1 max-h-[280px] overflow-y-auto custom-scrollbar pr-2 pt-1">
                         <div class="text-center py-10 text-gray-400">위에서 테마 버튼을 클릭해주세요!</div>
                     </div>
                 </div>
@@ -162,7 +178,7 @@
         let currentRightTab = 'scanner'; 
         let currentViewedStock = null; 
 
-        // 🌟 통합 유니버스 & 카테고리 맵 (스캐너와 카테고리를 동시 지원!)
+        // 🌟 통합 유니버스 & 카테고리 맵
         const STOCK_UNIVERSE = {
             kr: [
                 { name: '삼성전자', cat: '반도체' }, { name: 'SK하이닉스', cat: '반도체' }, { name: '한미반도체', cat: '반도체' },
@@ -185,7 +201,6 @@
             ]
         };
 
-        // 빠른 검색을 위한 헬퍼 함수
         function getCategory(name, market) {
             const list = STOCK_UNIVERSE[market || currentMarket];
             const found = list.find(s => s.name.toUpperCase() === name.toUpperCase() || s.name === name);
@@ -215,7 +230,10 @@
             }
             document.getElementById('scannerList').innerHTML = '<div class="text-center py-10 text-gray-400">우측 상단의 <strong class="text-emerald-500">스캔 시작</strong> 버튼을 눌러주세요!</div>';
             renderBottomList(); 
-            if (currentRightTab === 'category') renderCategoryPills(); // 카테고리 탭 리프레시
+            if (currentRightTab === 'category') {
+                renderCategoryPills(); 
+                document.getElementById('categoryStockList').innerHTML = '<div class="text-center py-10 text-gray-400">위에서 테마 버튼을 클릭해주세요!</div>';
+            }
         }
 
         function setListTab(tabName) {
@@ -225,7 +243,6 @@
             renderBottomList();
         }
 
-        // 🌟 우측 하단 탭 (스캐너 vs 테마별 모아보기) 스위칭
         function setRightTab(tabName) {
             currentRightTab = tabName;
             const tScan = document.getElementById('tab-scanner');
@@ -248,44 +265,71 @@
         }
 
         // ==========================================
-        // 카테고리 (테마) 렌더링 로직
+        // 🌟 테마(카테고리) 클릭 시 미니 스캐너 발동!
         // ==========================================
         function renderCategoryPills() {
             const container = document.getElementById('categoryPills');
             const universe = STOCK_UNIVERSE[currentMarket];
-            const categories = [...new Set(universe.map(item => item.cat))]; // 중복 제거
+            const categories = [...new Set(universe.map(item => item.cat))]; 
 
             container.innerHTML = categories.map(cat => `
                 <button onclick="selectCategory('${cat}')" class="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-full hover:bg-emerald-100 hover:text-emerald-700 transition focus:outline-none focus:ring-2 focus:ring-emerald-300">
                     #${cat}
                 </button>
             `).join('');
-            
-            document.getElementById('categoryStockList').innerHTML = '<div class="text-center py-10 text-gray-400">위에서 테마 뱃지를 클릭해주세요!</div>';
         }
 
-        function selectCategory(catName) {
+        async function selectCategory(catName) {
             const listContainer = document.getElementById('categoryStockList');
             const universe = STOCK_UNIVERSE[currentMarket];
-            const stocks = universe.filter(item => item.cat === catName);
-            const color = currentMarket === 'us' ? 'text-blue-600' : 'text-indigo-600';
+            const stocksToScan = universe.filter(item => item.cat === catName).map(item => item.name);
+            const color = currentMarket === 'us' ? 'text-blue-600' : 'text-emerald-600';
+            const bg = currentMarket === 'us' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800';
 
-            listContainer.innerHTML = stocks.map(item => `
-                <div class="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0 group">
-                    <span class="flex items-center gap-2">
-                        <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">#${catName}</span>
-                        <strong class="text-gray-800">${item.name}</strong> 
-                    </span>
-                    <button onclick="updateStock('${item.name}', '${currentMarket}')" class="text-[10px] font-bold bg-gray-100 text-gray-500 px-3 py-1.5 rounded-md hover:bg-emerald-100 hover:text-emerald-700 transition">
-                        분석하기 🔍
-                    </button>
+            // 1. 미니 스캐너 로딩 UI
+            listContainer.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-8 space-y-3">
+                    <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-500"></div>
+                    <div class="text-xs font-bold text-emerald-600 animate-pulse">[#${catName}] 테마 실시간 분석 중...</div>
                 </div>
-            `).join('');
+            `;
+
+            // 2. 테마에 속한 주식들만 콕 집어서 백엔드에 문의!
+            let results = [];
+            for (let query of stocksToScan) {
+                try {
+                    let res = await fetch(`https://value-up-lens.onrender.com/api/stock/${encodeURIComponent(query)}?market=${currentMarket}`);
+                    if (res.ok) results.push(await res.json());
+                } catch (e) { console.log(e); }
+            }
+
+            // 3. 점수 순으로 랭킹 정렬!
+            results.sort((a, b) => b.score - a.score);
+
+            // 4. 클릭 가능한 리스트로 예쁘게 화면에 뿌리기
+            listContainer.innerHTML = results.map((item, index) => {
+                let rankIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1;
+                return `
+                <div class="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0 group">
+                    <span class="cursor-pointer group-hover:${color} transition flex items-center gap-2" onclick="updateStock('${item.name}', '${currentMarket}')">
+                        <span class="w-5 text-center font-bold text-gray-400">${rankIcon}</span>
+                        <strong class="text-gray-800 group-hover:${color}">${item.name}</strong> 
+                        <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded hidden sm:inline">#${catName}</span>
+                    </span>
+                    <span class="${bg} px-2.5 py-1 rounded-md font-bold text-xs shadow-sm">${item.score}점</span>
+                </div>`;
+            }).join('');
         }
 
         // ==========================================
         // 메인 분석 및 즐겨찾기 로직
         // ==========================================
+        function rotateMessages() {
+            const messages = ["데이터를 수집하고 있습니다...", "적정 가치를 계산 중입니다...", "차트를 생성하고 있습니다..."];
+            let i = 0;
+            return setInterval(() => { document.getElementById('loadingMessage').innerText = messages[i % messages.length]; i++; }, 3000);
+        }
+
         function getScoreTooltipText(score, pbr, per, roe) {
             let title = score >= 90 ? "🔥 90점 이상: 완벽한 주식!" : score >= 80 ? "💎 80점 이상: 초특급 저평가" : score >= 75 ? "✨ 75점 이상: 매력적" : score >= 60 ? "👍 60점 이상: 양호" : score >= 50 ? "⚖️ 50점 이상: 관망" : score >= 40 ? "⚠️ 40점 이상: 다소 고평가" : "🚨 40점 미만: 주의";
             let pbrScore = pbr > 0 ? (pbr <= 0.8 ? 20 : pbr <= 1.2 ? 15 : pbr <= 1.5 ? 10 : pbr >= 3.0 ? -10 : 0) : 0;
@@ -313,8 +357,7 @@
 
             document.getElementById('loadingOverlay').classList.replace('hidden', 'flex');
             document.getElementById('priceChangeInfo').classList.add('hidden');
-            let i = 0; const messages = ["데이터 수집 중...", "적정 가치 계산 중...", "차트 생성 중..."];
-            const msgInterval = setInterval(() => { document.getElementById('loadingMessage').innerText = messages[i % messages.length]; i++; }, 3000);
+            const msgInterval = rotateMessages();
 
             try {
                 isCoolingDown = true; btn.disabled = true; btn.innerText = "분석 중...";
@@ -326,7 +369,6 @@
                 currentViewedStock = data; 
                 const currency = data.currency || "원";
 
-                // 배지 업데이트
                 document.getElementById('marketBadge').innerText = currentMarket === 'kr' ? '🇰🇷 국내' : '🇺🇸 해외';
                 document.getElementById('marketBadge').className = currentMarket === 'kr' ? "text-xs px-2 py-1 bg-indigo-100 text-indigo-700 font-bold rounded-md" : "text-xs px-2 py-1 bg-blue-100 text-blue-700 font-bold rounded-md";
                 const catBadge = document.getElementById('categoryBadge');
@@ -341,7 +383,6 @@
                 document.getElementById('valueScore').innerText = data.score || 50;
                 document.getElementById('scoreTooltip').innerHTML = getScoreTooltipText(data.score||50, data.pbr, data.per, data.roe);
 
-                // 즐겨찾기 버튼 업데이트
                 document.getElementById('favBtn').classList.remove('hidden');
                 checkFavoriteStatus();
 
@@ -373,7 +414,6 @@
             }
         }
 
-        // 즐겨찾기 추가/해제
         function toggleFavorite() {
             if (!currentViewedStock) return;
             const favBtn = document.getElementById('favBtn');
@@ -410,7 +450,7 @@
             const filteredList = listData.filter(item => (item.market || 'kr') === currentMarket);
             
             if (filteredList.length === 0) {
-                container.innerHTML = `<div class="text-gray-400 py-8 text-center">${currentListTab === 'history' ? '검색 기록이 없습니다.' : '즐겨찾기한 종목이 없습니다. 별(⭐)을 눌러 추가해보세요!'}</div>`;
+                container.innerHTML = `<div class="text-gray-400 py-8 text-center">${currentListTab === 'history' ? '검색 기록이 없습니다.' : '즐겨찾기한 종목이 없습니다.'}</div>`;
                 return;
             }
             filteredList.sort((a, b) => b.score - a.score);
@@ -465,7 +505,7 @@
             const container = document.getElementById('scannerList');
             btn.disabled = true; btn.classList.add('opacity-50', 'cursor-not-allowed');
             
-            const universe = STOCK_UNIVERSE[currentMarket].slice(0, 20).map(s => s.name); // 각 시장별 최상위 20개 종목 추출
+            const universe = STOCK_UNIVERSE[currentMarket].slice(0, 20).map(s => s.name); 
             let results = [];
 
             container.innerHTML = `<div class="flex flex-col items-center justify-center py-10 space-y-4"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div><div id="scanStatus" class="text-emerald-600 font-bold animate-pulse">엔진 예열 중...</div></div>`;
@@ -494,7 +534,7 @@
                     <span class="cursor-pointer group-hover:${color} transition flex items-center gap-2" onclick="updateStock('${item.name}', '${currentMarket}')">
                         <span class="w-5 text-center font-bold text-gray-400">${rankIcon}</span>
                         <strong class="text-gray-800 group-hover:${color}">${item.name}</strong> 
-                        <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded hidden sm:inline">${cat}</span>
+                        <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded hidden sm:inline">#${cat}</span>
                     </span>
                     <span class="${bg} px-2.5 py-1 rounded-md font-bold text-xs shadow-sm">${item.score}점</span>
                 </div>`;
