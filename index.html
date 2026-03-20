@@ -126,9 +126,14 @@
 
         <div id="rankingArea" class="flex flex-col md:flex-row gap-6 mt-8">
             <div class="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-gray-200 flex flex-col">
-                <div class="flex space-x-4 border-b border-gray-100 mb-4 pb-2">
-                    <button onclick="setListTab('history')" id="tab-history" class="text-sm font-bold text-indigo-600 border-b-2 border-indigo-600 pb-1 transition">🕒 최근 검색</button>
-                    <button onclick="setListTab('favorite')" id="tab-favorite" class="text-sm font-bold text-gray-400 pb-1 hover:text-gray-600 transition">⭐ 즐겨찾기</button>
+                <div class="flex justify-between items-end border-b border-gray-100 mb-4 pb-2">
+                    <div class="flex space-x-4">
+                        <button onclick="setListTab('history')" id="tab-history" class="text-sm font-bold text-indigo-600 border-b-2 border-indigo-600 pb-1 transition">🕒 최근 검색</button>
+                        <button onclick="setListTab('favorite')" id="tab-favorite" class="text-sm font-bold text-gray-400 pb-1 hover:text-gray-600 transition">⭐ 즐겨찾기</button>
+                    </div>
+                    <button onclick="refreshBottomList()" id="refreshListBtn" class="text-xs font-bold text-gray-400 hover:text-indigo-600 transition flex items-center gap-1 pb-1 focus:outline-none">
+                        🔄 갱신
+                    </button>
                 </div>
                 <div id="bottomListContainer" class="text-sm text-gray-600 space-y-2 flex-1 max-h-[420px] overflow-y-auto custom-scrollbar pr-2">
                     </div>
@@ -197,7 +202,7 @@
                 { name: 'TSLA', cat: '전기차' }, { name: 'NVDA', cat: '반도체' }, { name: 'AMD', cat: '반도체' }, { name: 'TSM', cat: '반도체' }, { name: 'QCOM', cat: '반도체' },
                 { name: 'BRK.B', cat: '금융/지주' }, { name: 'LLY', cat: '제약/바이오' }, { name: 'NVO', cat: '제약/바이오' },
                 { name: 'NFLX', cat: '미디어' }, { name: 'PEP', cat: '식음료' }, { name: 'KO', cat: '식음료' },
-                { name: 'DIS', cat: '엔터테인먼트' }, { name: 'COST', 고: '유통' }, { name: 'COIN', cat: '가상화폐' }
+                { name: 'DIS', cat: '엔터테인먼트' }, { name: 'COST', cat: '유통' }, { name: 'COIN', cat: '가상화폐' }
             ]
         };
 
@@ -211,17 +216,18 @@
             return 0;
         }
 
-        // 🌟 리스트 아이템 UI 생성기 (주가 및 등락률 포함!)
+        // 🌟 리스트 아이템 UI 생성기
         function createListItemHTML(item, index, themeColor, isScanner = false) {
             let rankIcon = isScanner ? (index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1) : index + 1;
             const cat = getCategory(item.name, item.market);
             
-            // 시세 텍스트 포맷팅
+            // 시세 텍스트 (과거 데이터 호환성 보장: 없으면 - 표시)
             const priceDisplay = item.price ? item.price : '-';
-            let changeDisplay = `<span class="text-gray-400 font-semibold">- 0.00%</span>`;
-            if (item.change !== undefined) {
-                if (item.change > 0) changeDisplay = `<span class="text-red-500 font-semibold">▲ ${item.change.toFixed(2)}%</span>`;
-                else if (item.change < 0) changeDisplay = `<span class="text-blue-500 font-semibold">▼ ${Math.abs(item.change).toFixed(2)}%</span>`;
+            let changeDisplay = `<span class="text-gray-400 font-semibold text-[10px] sm:text-xs">- 0.00%</span>`;
+            
+            if (item.change !== undefined && item.change !== 0) {
+                if (item.change > 0) changeDisplay = `<span class="text-red-500 font-semibold text-[10px] sm:text-xs">▲ ${item.change.toFixed(2)}%</span>`;
+                else if (item.change < 0) changeDisplay = `<span class="text-blue-500 font-semibold text-[10px] sm:text-xs">▼ ${Math.abs(item.change).toFixed(2)}%</span>`;
             }
             
             const textColor = currentMarket === 'us' ? 'text-blue-600' : `text-${themeColor}-600`;
@@ -339,7 +345,7 @@
                     let res = await fetch(`https://value-up-lens.onrender.com/api/stock/${encodeURIComponent(query)}?market=${currentMarket}`);
                     if (res.ok) {
                         let data = await res.json();
-                        data.change = getChangePercent(data); // 🌟 등락률 계산 추가!
+                        data.change = getChangePercent(data); 
                         results.push(data);
                     }
                 } catch (e) { console.log(e); }
@@ -350,7 +356,7 @@
         }
 
         // ==========================================
-        // 메인 분석 및 즐겨찾기 로직
+        // 메인 분석 로직
         // ==========================================
         function rotateMessages() {
             const messages = ["데이터를 수집하고 있습니다...", "적정 가치를 계산 중입니다...", "차트를 생성하고 있습니다..."];
@@ -394,7 +400,7 @@
                 
                 const data = await response.json();
                 data.market = currentMarket; 
-                data.change = getChangePercent(data); // 🌟 메인 데이터에도 등락률 주입
+                data.change = getChangePercent(data); 
                 currentViewedStock = data; 
                 const currency = data.currency || "원";
 
@@ -444,18 +450,20 @@
             }
         }
 
+        // ==========================================
+        // 🌟 즐겨찾기 로직
+        // ==========================================
         function toggleFavorite() {
             if (!currentViewedStock) return;
             const favBtn = document.getElementById('favBtn');
             let favorites = JSON.parse(localStorage.getItem('myFavorites')) || [];
-            const isExist = favorites.findIndex(item => item.name === currentViewedStock.name && item.market === currentViewedStock.market);
+            const isExist = favorites.findIndex(item => item.name === currentViewedStock.name && (item.market || 'kr') === currentViewedStock.market);
             
             if (isExist > -1) {
                 favorites.splice(isExist, 1);
                 favBtn.innerText = '☆';
                 favBtn.classList.replace('text-yellow-400', 'text-gray-300');
             } else {
-                // 🌟 저장할 때 가격과 등락률도 같이 저장!
                 favorites.push({ 
                     name: currentViewedStock.name, 
                     score: currentViewedStock.score, 
@@ -476,11 +484,14 @@
             if (!currentViewedStock) return;
             const favBtn = document.getElementById('favBtn');
             let favorites = JSON.parse(localStorage.getItem('myFavorites')) || [];
-            const isExist = favorites.some(item => item.name === currentViewedStock.name && item.market === currentViewedStock.market);
+            const isExist = favorites.some(item => item.name === currentViewedStock.name && (item.market || 'kr') === currentViewedStock.market);
             if (isExist) { favBtn.innerText = '★'; favBtn.classList.replace('text-gray-300', 'text-yellow-400'); } 
             else { favBtn.innerText = '☆'; favBtn.classList.replace('text-yellow-400', 'text-gray-300'); }
         }
 
+        // ==========================================
+        // 🌟 내 리스트 (최근검색/즐겨찾기) 렌더링 & 새로고침 로직
+        // ==========================================
         function renderBottomList() {
             const container = document.getElementById('bottomListContainer');
             const listData = JSON.parse(localStorage.getItem(currentListTab === 'history' ? 'myRanking' : 'myFavorites')) || [];
@@ -491,14 +502,13 @@
                 return;
             }
             filteredList.sort((a, b) => b.score - a.score);
-            // 🌟 헬퍼 함수를 사용하여 리스트 렌더링
             container.innerHTML = filteredList.map((item, index) => createListItemHTML(item, index, 'indigo', false)).join('');
         }
 
         function saveToMyRanking(data) {
             if (!data || !data.score) return;
             let history = JSON.parse(localStorage.getItem('myRanking')) || [];
-            history = history.filter(item => item.name !== data.name);
+            history = history.filter(item => item.name !== data.name && (item.market || 'kr') === data.market);
             history.push({ 
                 name: data.name, 
                 score: data.score, 
@@ -512,6 +522,69 @@
             if (currentListTab === 'history') renderBottomList();
         }
 
+        // 🌟 신규 탑재! 내 리스트(히스토리/즐겨찾기) 일괄 새로고침 (실시간 시세 갱신)
+        async function refreshBottomList() {
+            const btn = document.getElementById('refreshListBtn');
+            const container = document.getElementById('bottomListContainer');
+            const targetStorage = currentListTab === 'history' ? 'myRanking' : 'myFavorites';
+            let listData = JSON.parse(localStorage.getItem(targetStorage)) || [];
+            
+            // 현재 보고 있는 시장(탭)의 데이터만 추출
+            const itemsToRefresh = listData.filter(item => (item.market || 'kr') === currentMarket);
+            if (itemsToRefresh.length === 0) return;
+
+            // UI를 로딩 상태로 변경
+            btn.disabled = true;
+            btn.innerText = '⏳ 갱신 중...';
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-10 space-y-3">
+                    <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500"></div>
+                    <div class="text-xs font-bold text-indigo-600 animate-pulse">최신 주가 데이터로 업데이트 중입니다...</div>
+                </div>
+            `;
+
+            let updatedItems = [];
+            // 각 종목마다 최신 데이터 요청
+            for (let item of itemsToRefresh) {
+                try {
+                    let res = await fetch(`https://value-up-lens.onrender.com/api/stock/${encodeURIComponent(item.name)}?market=${item.market || 'kr'}`);
+                    if (res.ok) {
+                        let data = await res.json();
+                        data.market = item.market || 'kr';
+                        data.change = getChangePercent(data);
+                        updatedItems.push(data);
+                    } else {
+                        updatedItems.push(item); // 실패하면 예전 데이터 유지
+                    }
+                } catch(e) {
+                    updatedItems.push(item);
+                }
+            }
+
+            // 원본 listData와 병합 (업데이트된 항목 덮어쓰기)
+            for (let updated of updatedItems) {
+                const idx = listData.findIndex(x => x.name === updated.name && (x.market || 'kr') === updated.market);
+                if (idx > -1) {
+                    listData[idx] = { 
+                        name: updated.name, 
+                        score: updated.score, 
+                        price: updated.price, 
+                        change: updated.change, 
+                        market: updated.market
+                    };
+                }
+            }
+
+            // 로컬 스토리지에 다시 저장하고 화면 그리기
+            localStorage.setItem(targetStorage, JSON.stringify(listData));
+            btn.disabled = false;
+            btn.innerText = '🔄 갱신';
+            renderBottomList();
+        }
+
+        // ==========================================
+        // 차트 및 가이드 로직
+        // ==========================================
         function updateGuideByScore(score, name) {
             const light = document.getElementById('signalLight');
             const guide = document.getElementById('recorderGuide');
@@ -552,14 +625,13 @@
                     let res = await fetch(`https://value-up-lens.onrender.com/api/stock/${encodeURIComponent(query)}?market=${currentMarket}`);
                     if (res.ok) {
                         let data = await res.json();
-                        data.change = getChangePercent(data); // 🌟 스캐너 데이터에도 등락률 주입!
+                        data.change = getChangePercent(data); 
                         results.push(data);
                     }
                 } catch (e) { console.log(e); }
             }
 
             results.sort((a, b) => b.score - a.score);
-            // 🌟 헬퍼 함수를 사용하여 리스트 렌더링
             container.innerHTML = results.map((item, index) => createListItemHTML(item, index, 'emerald', true)).join('');
             
             btn.innerText = '스캐너 재실행';
