@@ -51,12 +51,19 @@
                             </div>
                         </div>
                     </div>
-                    <div class="text-right">
+                    <div class="text-right flex flex-col items-end">
                         <div id="signalLight" class="inline-block px-4 py-1 rounded-full text-xs font-black mb-2 bg-gray-100 text-gray-400">분석 전</div>
-                        <div class="flex items-baseline justify-end gap-1">
-                            <span id="valueScore" class="text-5xl font-black text-indigo-600">0</span>
-                            <span class="text-gray-400 font-bold">점</span>
+                        
+                        <div class="relative group cursor-help flex items-baseline justify-end gap-1 mt-1">
+                            <span id="valueScore" class="text-5xl font-black text-indigo-600 group-hover:text-indigo-700 transition-colors">0</span>
+                            <span class="text-gray-400 font-bold border-b-2 border-dashed border-gray-300 pb-0.5">점</span>
+                            
+                            <div class="absolute bottom-full right-0 mb-3 w-max max-w-[220px] bg-gray-900 text-white text-xs rounded-xl py-2.5 px-3.5 opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none z-10 shadow-lg text-center font-medium translate-y-2 group-hover:translate-y-0">
+                                <span id="scoreTooltip">분석 대기 중</span>
+                                <div class="absolute top-full right-4 -mt-1 border-4 border-transparent border-t-gray-900"></div>
+                            </div>
                         </div>
+
                     </div>
                 </div>
                 <div class="h-[350px]">
@@ -68,37 +75,33 @@
                 <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
                     <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2">📊 실제 퀀트 데이터</h3>
                     <div class="space-y-4">
-                        
                         <div class="pb-3 border-b border-gray-50">
                             <div class="flex justify-between text-sm mb-1">
                                 <span class="text-gray-600 font-semibold">현재 PBR <span class="text-xs text-gray-400 font-normal">(주가순자산)</span></span>
                                 <span id="statPbr" class="font-bold text-gray-800">- 배</span>
                             </div>
                             <p class="text-xs text-indigo-500 bg-indigo-50 inline-block px-2 py-1 rounded-md">
-                                💡 낮을수록 내재가치 대비 저평가! (1 미만 굿)
+                                💡 낮을수록 내재가치 대비 저평가! (1 미만 👍)
                             </p>
                         </div>
-
                         <div class="pb-3 border-b border-gray-50">
                             <div class="flex justify-between text-sm mb-1">
                                 <span class="text-gray-600 font-semibold">현재 PER <span class="text-xs text-gray-400 font-normal">(주가수익)</span></span>
                                 <span id="statPer" class="font-bold text-gray-800">- 배</span>
                             </div>
                             <p class="text-xs text-indigo-500 bg-indigo-50 inline-block px-2 py-1 rounded-md">
-                                💡 낮을수록 버는 돈 대비 저평가! (10 이하 굿)
+                                💡 낮을수록 버는 돈 대비 저평가! (10 이하 👍)
                             </p>
                         </div>
-
                         <div class="pb-1">
                             <div class="flex justify-between text-sm mb-1">
                                 <span class="text-gray-600 font-semibold">현재 ROE <span class="text-xs text-gray-400 font-normal">(자기자본이익률)</span></span>
                                 <span id="statRoe" class="font-bold text-emerald-600">- %</span>
                             </div>
                             <p class="text-xs text-emerald-600 bg-emerald-50 inline-block px-2 py-1 rounded-md">
-                                💡 높을수록 돈을 잘 버는 알짜 기업! (15% 이상 굿)
+                                💡 높을수록 돈을 잘 버는 알짜 기업! (15% 이상 👍)
                             </p>
                         </div>
-
                     </div>
                 </div>
 
@@ -165,6 +168,17 @@
             }, 3000);
         }
 
+        // 🌟 점수에 따른 툴팁 텍스트를 반환하는 함수!
+        function getScoreTooltipText(score) {
+            if (score >= 90) return "🔥 90점 이상: 만점에 가까운 완벽한 밸류업 주식!";
+            if (score >= 80) return "💎 80점 이상: 초특급 저평가 우량주 (적극 매수 고려)";
+            if (score >= 75) return "✨ 75점 이상: 매력적인 저평가 우량주";
+            if (score >= 60) return "👍 60점 이상: 펀더멘탈이 양호한 가치주";
+            if (score >= 50) return "⚖️ 50점 이상: 적정 가치 수준 (관망)";
+            if (score >= 40) return "⚠️ 40점 이상: 다소 고평가 또는 수익성 부진";
+            return "🚨 40점 미만: 심각한 고평가 또는 적자 상태 (주의)";
+        }
+
         async function updateStock() {
             const queryInput = document.getElementById('stockSearch');
             const btn = document.getElementById('searchBtn');
@@ -212,7 +226,13 @@
                 document.getElementById('statPbr').innerText = data.pbr ? data.pbr + " 배" : "N/A";
                 document.getElementById('statPer').innerText = data.per ? data.per + " 배" : "N/A";
                 document.getElementById('statRoe').innerText = data.roe ? data.roe + " %" : "N/A";
-                document.getElementById('valueScore').innerText = data.score || 50;
+                
+                // 점수 입력
+                const finalScore = data.score || 50;
+                document.getElementById('valueScore').innerText = finalScore;
+                
+                // 🌟 툴팁 텍스트 업데이트!
+                document.getElementById('scoreTooltip').innerText = getScoreTooltipText(finalScore);
 
                 if (data.trend && data.trend.length >= 2 && data.price) {
                     const currentPriceNum = parseFloat(String(data.price).replace(/,/g, ''));
@@ -243,7 +263,7 @@
                 }
 
                 updateChart(data.trend, data.dates, currency);
-                updateGuideByScore(data.score, data.name);
+                updateGuideByScore(finalScore, data.name);
                 saveToMyRanking(data);
 
             } catch (error) {
@@ -270,6 +290,10 @@
                 light.innerText = "적극 매수";
                 light.className = "inline-block px-4 py-1 rounded-full text-xs font-black mb-2 bg-green-100 text-green-700";
                 guide.innerText = `현재 ${name}는 밸류업 매력이 매우 높습니다. 저평가 구간이 확실하니 공격적인 비중 확대를 고려하세요.`;
+            } else if (score >= 60) {
+                light.innerText = "매력적";
+                light.className = "inline-block px-4 py-1 rounded-full text-xs font-black mb-2 bg-blue-100 text-blue-700";
+                guide.innerText = `${name}는 펀더멘탈이 탄탄한 양호한 가치주입니다. 포트폴리오 편입을 긍정적으로 검토해 보세요.`;
             } else if (score >= 50) {
                 light.innerText = "보유/관망";
                 light.className = "inline-block px-4 py-1 rounded-full text-xs font-black mb-2 bg-yellow-100 text-yellow-700";
@@ -277,7 +301,7 @@
             } else {
                 light.innerText = "주의/고평가";
                 light.className = "inline-block px-4 py-1 rounded-full text-xs font-black mb-2 bg-red-100 text-red-700";
-                guide.innerText = `현재 가치 대비 고평가 상태입니다. 무리한 진입보다는 조정을 기다리거나 다른 저평가주를 찾아보세요.`;
+                guide.innerText = `현재 가치 대비 고평가 상태이거나 수익성이 아쉽습니다. 무리한 진입보다는 조정을 기다려보세요.`;
             }
         }
 
