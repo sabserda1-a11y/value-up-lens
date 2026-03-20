@@ -67,15 +67,38 @@
             <div class="space-y-6">
                 <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
                     <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2">📊 실제 퀀트 데이터</h3>
-                    <div class="space-y-3">
-                        <div class="flex justify-between text-sm">
-                            <span class="text-gray-500">현재 PBR</span>
-                            <span id="statPbr" class="font-bold text-gray-800">- 배</span>
+                    <div class="space-y-4">
+                        
+                        <div class="pb-3 border-b border-gray-50">
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="text-gray-600 font-semibold">현재 PBR <span class="text-xs text-gray-400 font-normal">(주가순자산)</span></span>
+                                <span id="statPbr" class="font-bold text-gray-800">- 배</span>
+                            </div>
+                            <p class="text-xs text-indigo-500 bg-indigo-50 inline-block px-2 py-1 rounded-md">
+                                💡 낮을수록 내재가치 대비 저평가! (1 미만 굿)
+                            </p>
                         </div>
-                        <div class="flex justify-between text-sm">
-                            <span class="text-gray-500">ROE (자기자본이익률)</span>
-                            <span id="statRoe" class="font-bold text-green-600">- %</span>
+
+                        <div class="pb-3 border-b border-gray-50">
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="text-gray-600 font-semibold">현재 PER <span class="text-xs text-gray-400 font-normal">(주가수익)</span></span>
+                                <span id="statPer" class="font-bold text-gray-800">- 배</span>
+                            </div>
+                            <p class="text-xs text-indigo-500 bg-indigo-50 inline-block px-2 py-1 rounded-md">
+                                💡 낮을수록 버는 돈 대비 저평가! (10 이하 굿)
+                            </p>
                         </div>
+
+                        <div class="pb-1">
+                            <div class="flex justify-between text-sm mb-1">
+                                <span class="text-gray-600 font-semibold">현재 ROE <span class="text-xs text-gray-400 font-normal">(자기자본이익률)</span></span>
+                                <span id="statRoe" class="font-bold text-emerald-600">- %</span>
+                            </div>
+                            <p class="text-xs text-emerald-600 bg-emerald-50 inline-block px-2 py-1 rounded-md">
+                                💡 높을수록 돈을 잘 버는 알짜 기업! (15% 이상 굿)
+                            </p>
+                        </div>
+
                     </div>
                 </div>
 
@@ -89,7 +112,6 @@
         </div>
 
         <div id="rankingArea" class="flex flex-col md:flex-row gap-6 mt-8">
-            
             <div class="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
                 <h3 class="text-lg font-bold text-indigo-900 mb-1">🥇 나의 관심종목 랭킹</h3>
                 <p class="text-xs text-gray-500 mb-4">내가 검색했던 종목들의 점수 순위입니다.</p>
@@ -110,7 +132,6 @@
                     버튼을 눌러 추천 종목을 확인하세요!
                 </div>
             </div>
-            
         </div>
     </div>
 
@@ -166,7 +187,6 @@
             overlay.classList.add('flex');
             const msgInterval = rotateMessages();
 
-            // 🌟 분석을 시작할 때 이전 등락률 정보를 숨깁니다.
             document.getElementById('priceChangeInfo').classList.add('hidden');
             document.getElementById('priceChangeInfo').classList.remove('flex');
 
@@ -190,14 +210,12 @@
                 document.getElementById('displayStockName').innerText = data.name || "알 수 없는 종목";
                 document.getElementById('displayPrice').innerText = (data.price || "0") + " " + currency;
                 document.getElementById('statPbr').innerText = data.pbr ? data.pbr + " 배" : "N/A";
+                document.getElementById('statPer').innerText = data.per ? data.per + " 배" : "N/A";
                 document.getElementById('statRoe').innerText = data.roe ? data.roe + " %" : "N/A";
                 document.getElementById('valueScore').innerText = data.score || 50;
 
-                // 🌟 등락률(%) 계산 로직 추가!
                 if (data.trend && data.trend.length >= 2 && data.price) {
-                    // 현재가 (콤마 제거 후 숫자로 변환)
                     const currentPriceNum = parseFloat(String(data.price).replace(/,/g, ''));
-                    // 어제(이전) 가격은 트렌드 차트의 끝에서 두 번째 값!
                     const prevPriceNum = data.trend[data.trend.length - 2];
                     
                     if (prevPriceNum > 0) {
@@ -206,10 +224,8 @@
                         const prevTextEl = document.getElementById('prevPriceText');
                         const percentTextEl = document.getElementById('changePercentText');
                         
-                        // 어제 가격 표시
                         prevTextEl.innerText = prevPriceNum.toLocaleString() + currency;
                         
-                        // 상승(빨강), 하락(파랑), 보합(회색) 처리 (한국 증시 기준)
                         if (changePercent > 0) {
                             percentTextEl.innerText = `▲ ${changePercent.toFixed(2)}%`;
                             percentTextEl.className = "px-2 py-0.5 rounded-md bg-red-100 text-red-600";
@@ -221,7 +237,6 @@
                             percentTextEl.className = "px-2 py-0.5 rounded-md bg-gray-100 text-gray-600";
                         }
                         
-                        // 정보 영역 보이기
                         changeInfoDiv.classList.remove('hidden');
                         changeInfoDiv.classList.add('flex');
                     }
@@ -229,8 +244,6 @@
 
                 updateChart(data.trend, data.dates, currency);
                 updateGuideByScore(data.score, data.name);
-                
-                // 내 랭킹에 저장
                 saveToMyRanking(data);
 
             } catch (error) {
@@ -318,9 +331,6 @@
             });
         }
 
-        // ==========================================
-        // 🥇 랭킹 시스템 (내 검색 기록 & Top 5)
-        // ==========================================
         function saveToMyRanking(data) {
             if (!data || !data.score) return;
             let history = JSON.parse(localStorage.getItem('myRanking')) || [];
@@ -337,7 +347,6 @@
             const container = document.getElementById('myRankingList');
             if (history.length === 0) return;
             
-            // 🌟 신규 적용: 내 랭킹 리스트도 클릭 시 해당 종목으로 바로 분석 실행!
             container.innerHTML = history.map((item, index) => `
                 <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0 group">
                     <span class="cursor-pointer group-hover:text-indigo-600 transition" onclick="document.getElementById('stockSearch').value='${item.name}'; updateStock();">
