@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Value-up Lens V4 | Ultimate Dashboard</title>
+    <title>Value-up Lens V5 | Pro Dashboard</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap" rel="stylesheet">
@@ -130,7 +130,7 @@
                     <button onclick="setListTab('history')" id="tab-history" class="text-sm font-bold text-indigo-600 border-b-2 border-indigo-600 pb-1 transition">🕒 최근 검색</button>
                     <button onclick="setListTab('favorite')" id="tab-favorite" class="text-sm font-bold text-gray-400 pb-1 hover:text-gray-600 transition">⭐ 즐겨찾기</button>
                 </div>
-                <div id="bottomListContainer" class="text-sm text-gray-600 space-y-2 flex-1 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                <div id="bottomListContainer" class="text-sm text-gray-600 space-y-2 flex-1 max-h-[420px] overflow-y-auto custom-scrollbar pr-2">
                     </div>
             </div>
 
@@ -145,7 +145,7 @@
                         <p id="scannerDesc" class="text-xs text-gray-500">한국 우량주 실시간 밸류업 스캔</p>
                         <button onclick="runScanner()" id="scannerBtn" class="text-xs px-3 py-1.5 bg-emerald-500 text-white rounded-lg font-bold hover:bg-emerald-600 transition">스캔 시작</button>
                     </div>
-                    <div id="scannerList" class="text-sm text-gray-600 space-y-2 flex-1 max-h-[350px] overflow-y-auto custom-scrollbar pr-2">
+                    <div id="scannerList" class="text-sm text-gray-600 space-y-2 flex-1 max-h-[380px] overflow-y-auto custom-scrollbar pr-2">
                         <div class="text-center py-10 text-gray-400">우측 상단의 <strong class="text-emerald-500">스캔 시작</strong> 버튼을 눌러주세요!</div>
                     </div>
                 </div>
@@ -153,7 +153,7 @@
                 <div id="categoryArea" class="hidden flex-col flex-1">
                     <p class="text-xs text-gray-500 mb-3">관심 있는 테마를 클릭하면, 해당 테마의 우량주들이 <strong>실시간 점수 순</strong>으로 랭크됩니다.</p>
                     <div id="categoryPills" class="flex flex-wrap gap-2 mb-4 pb-2 border-b border-gray-100"></div>
-                    <div id="categoryStockList" class="text-sm text-gray-600 space-y-2 flex-1 max-h-[280px] overflow-y-auto custom-scrollbar pr-2 pt-1">
+                    <div id="categoryStockList" class="text-sm text-gray-600 space-y-2 flex-1 max-h-[310px] overflow-y-auto custom-scrollbar pr-2 pt-1">
                         <div class="text-center py-10 text-gray-400">위에서 테마 버튼을 클릭해주세요!</div>
                     </div>
                 </div>
@@ -197,9 +197,57 @@
                 { name: 'TSLA', cat: '전기차' }, { name: 'NVDA', cat: '반도체' }, { name: 'AMD', cat: '반도체' }, { name: 'TSM', cat: '반도체' }, { name: 'QCOM', cat: '반도체' },
                 { name: 'BRK.B', cat: '금융/지주' }, { name: 'LLY', cat: '제약/바이오' }, { name: 'NVO', cat: '제약/바이오' },
                 { name: 'NFLX', cat: '미디어' }, { name: 'PEP', cat: '식음료' }, { name: 'KO', cat: '식음료' },
-                { name: 'DIS', cat: '엔터테인먼트' }, { name: 'COST', cat: '유통' }, { name: 'COIN', cat: '가상화폐' }
+                { name: 'DIS', cat: '엔터테인먼트' }, { name: 'COST', 고: '유통' }, { name: 'COIN', cat: '가상화폐' }
             ]
         };
+
+        // 🌟 상승/하락률 계산 헬퍼 함수
+        function getChangePercent(data) {
+            if (data.trend && data.trend.length >= 2 && data.price) {
+                const currentPriceNum = parseFloat(String(data.price).replace(/,/g, ''));
+                const prevPriceNum = data.trend[data.trend.length - 2];
+                if (prevPriceNum > 0) return ((currentPriceNum - prevPriceNum) / prevPriceNum) * 100;
+            }
+            return 0;
+        }
+
+        // 🌟 리스트 아이템 UI 생성기 (주가 및 등락률 포함!)
+        function createListItemHTML(item, index, themeColor, isScanner = false) {
+            let rankIcon = isScanner ? (index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1) : index + 1;
+            const cat = getCategory(item.name, item.market);
+            
+            // 시세 텍스트 포맷팅
+            const priceDisplay = item.price ? item.price : '-';
+            let changeDisplay = `<span class="text-gray-400 font-semibold">- 0.00%</span>`;
+            if (item.change !== undefined) {
+                if (item.change > 0) changeDisplay = `<span class="text-red-500 font-semibold">▲ ${item.change.toFixed(2)}%</span>`;
+                else if (item.change < 0) changeDisplay = `<span class="text-blue-500 font-semibold">▼ ${Math.abs(item.change).toFixed(2)}%</span>`;
+            }
+            
+            const textColor = currentMarket === 'us' ? 'text-blue-600' : `text-${themeColor}-600`;
+            const bgClass = currentMarket === 'us' ? 'bg-blue-100 text-blue-800' : `bg-${themeColor}-100 text-${themeColor}-800`;
+
+            return `
+            <div class="flex justify-between items-center py-3 border-b border-gray-100 last:border-0 group">
+                <span class="cursor-pointer group-hover:${textColor} transition flex items-center gap-2 flex-1 min-w-0" onclick="updateStock('${item.name}', '${item.market || currentMarket}')">
+                    <span class="w-5 text-center font-bold text-gray-400 shrink-0">${rankIcon}</span>
+                    <div class="flex flex-col truncate">
+                        <div class="flex items-center gap-1.5">
+                            <strong class="text-gray-800 group-hover:${textColor} truncate max-w-[100px] sm:max-w-full">${item.name}</strong> 
+                            <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded hidden sm:inline shrink-0">${cat}</span>
+                        </div>
+                    </div>
+                </span>
+                
+                <div class="flex items-center gap-3 shrink-0 ml-2">
+                    <div class="flex flex-col items-end text-[11px] sm:text-xs">
+                        <span class="font-bold text-gray-700">${priceDisplay}</span>
+                        ${changeDisplay}
+                    </div>
+                    <span class="${bgClass} px-2 py-1.5 rounded-md font-bold text-xs sm:text-sm shadow-sm w-12 text-center shrink-0">${item.score}</span>
+                </div>
+            </div>`;
+        }
 
         function getCategory(name, market) {
             const list = STOCK_UNIVERSE[market || currentMarket];
@@ -265,13 +313,12 @@
         }
 
         // ==========================================
-        // 🌟 테마(카테고리) 클릭 시 미니 스캐너 발동!
+        // 🌟 테마(카테고리) 클릭 시 미니 스캐너 발동
         // ==========================================
         function renderCategoryPills() {
             const container = document.getElementById('categoryPills');
             const universe = STOCK_UNIVERSE[currentMarket];
             const categories = [...new Set(universe.map(item => item.cat))]; 
-
             container.innerHTML = categories.map(cat => `
                 <button onclick="selectCategory('${cat}')" class="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-full hover:bg-emerald-100 hover:text-emerald-700 transition focus:outline-none focus:ring-2 focus:ring-emerald-300">
                     #${cat}
@@ -283,42 +330,23 @@
             const listContainer = document.getElementById('categoryStockList');
             const universe = STOCK_UNIVERSE[currentMarket];
             const stocksToScan = universe.filter(item => item.cat === catName).map(item => item.name);
-            const color = currentMarket === 'us' ? 'text-blue-600' : 'text-emerald-600';
-            const bg = currentMarket === 'us' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800';
 
-            // 1. 미니 스캐너 로딩 UI
-            listContainer.innerHTML = `
-                <div class="flex flex-col items-center justify-center py-8 space-y-3">
-                    <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-500"></div>
-                    <div class="text-xs font-bold text-emerald-600 animate-pulse">[#${catName}] 테마 실시간 분석 중...</div>
-                </div>
-            `;
+            listContainer.innerHTML = `<div class="flex flex-col items-center justify-center py-8 space-y-3"><div class="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-500"></div><div class="text-xs font-bold text-emerald-600 animate-pulse">[#${catName}] 실시간 분석 중...</div></div>`;
 
-            // 2. 테마에 속한 주식들만 콕 집어서 백엔드에 문의!
             let results = [];
             for (let query of stocksToScan) {
                 try {
                     let res = await fetch(`https://value-up-lens.onrender.com/api/stock/${encodeURIComponent(query)}?market=${currentMarket}`);
-                    if (res.ok) results.push(await res.json());
+                    if (res.ok) {
+                        let data = await res.json();
+                        data.change = getChangePercent(data); // 🌟 등락률 계산 추가!
+                        results.push(data);
+                    }
                 } catch (e) { console.log(e); }
             }
 
-            // 3. 점수 순으로 랭킹 정렬!
             results.sort((a, b) => b.score - a.score);
-
-            // 4. 클릭 가능한 리스트로 예쁘게 화면에 뿌리기
-            listContainer.innerHTML = results.map((item, index) => {
-                let rankIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1;
-                return `
-                <div class="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0 group">
-                    <span class="cursor-pointer group-hover:${color} transition flex items-center gap-2" onclick="updateStock('${item.name}', '${currentMarket}')">
-                        <span class="w-5 text-center font-bold text-gray-400">${rankIcon}</span>
-                        <strong class="text-gray-800 group-hover:${color}">${item.name}</strong> 
-                        <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded hidden sm:inline">#${catName}</span>
-                    </span>
-                    <span class="${bg} px-2.5 py-1 rounded-md font-bold text-xs shadow-sm">${item.score}점</span>
-                </div>`;
-            }).join('');
+            listContainer.innerHTML = results.map((item, index) => createListItemHTML(item, index, 'emerald', true)).join('');
         }
 
         // ==========================================
@@ -366,6 +394,7 @@
                 
                 const data = await response.json();
                 data.market = currentMarket; 
+                data.change = getChangePercent(data); // 🌟 메인 데이터에도 등락률 주입
                 currentViewedStock = data; 
                 const currency = data.currency || "원";
 
@@ -386,18 +415,19 @@
                 document.getElementById('favBtn').classList.remove('hidden');
                 checkFavoriteStatus();
 
-                if (data.trend && data.trend.length >= 2 && data.price) {
-                    const currentPriceNum = parseFloat(String(data.price).replace(/,/g, ''));
+                if (data.change !== 0) {
                     const prevPriceNum = data.trend[data.trend.length - 2];
-                    if (prevPriceNum > 0) {
-                        const changePercent = ((currentPriceNum - prevPriceNum) / prevPriceNum) * 100;
-                        document.getElementById('prevPriceText').innerText = prevPriceNum.toLocaleString() + currency;
-                        const ptEl = document.getElementById('changePercentText');
-                        if (changePercent > 0) { ptEl.innerText = `▲ ${changePercent.toFixed(2)}%`; ptEl.className = "px-2 py-0.5 rounded-md bg-red-100 text-red-600"; }
-                        else if (changePercent < 0) { ptEl.innerText = `▼ ${Math.abs(changePercent).toFixed(2)}%`; ptEl.className = "px-2 py-0.5 rounded-md bg-blue-100 text-blue-600"; }
-                        else { ptEl.innerText = `- 0.00%`; ptEl.className = "px-2 py-0.5 rounded-md bg-gray-100 text-gray-600"; }
-                        document.getElementById('priceChangeInfo').classList.replace('hidden', 'flex');
-                    }
+                    document.getElementById('prevPriceText').innerText = prevPriceNum.toLocaleString() + currency;
+                    const ptEl = document.getElementById('changePercentText');
+                    if (data.change > 0) { ptEl.innerText = `▲ ${data.change.toFixed(2)}%`; ptEl.className = "px-2 py-0.5 rounded-md bg-red-100 text-red-600"; }
+                    else if (data.change < 0) { ptEl.innerText = `▼ ${Math.abs(data.change).toFixed(2)}%`; ptEl.className = "px-2 py-0.5 rounded-md bg-blue-100 text-blue-600"; }
+                    document.getElementById('priceChangeInfo').classList.replace('hidden', 'flex');
+                } else if(data.trend && data.trend.length >=2) {
+                     const prevPriceNum = data.trend[data.trend.length - 2];
+                     document.getElementById('prevPriceText').innerText = prevPriceNum.toLocaleString() + currency;
+                     const ptEl = document.getElementById('changePercentText');
+                     ptEl.innerText = `- 0.00%`; ptEl.className = "px-2 py-0.5 rounded-md bg-gray-100 text-gray-600";
+                     document.getElementById('priceChangeInfo').classList.replace('hidden', 'flex');
                 }
 
                 updateChart(data.trend, data.dates, currency);
@@ -425,7 +455,14 @@
                 favBtn.innerText = '☆';
                 favBtn.classList.replace('text-yellow-400', 'text-gray-300');
             } else {
-                favorites.push({ name: currentViewedStock.name, score: currentViewedStock.score, pbr: currentViewedStock.pbr, market: currentViewedStock.market });
+                // 🌟 저장할 때 가격과 등락률도 같이 저장!
+                favorites.push({ 
+                    name: currentViewedStock.name, 
+                    score: currentViewedStock.score, 
+                    price: currentViewedStock.price,
+                    change: currentViewedStock.change,
+                    market: currentViewedStock.market 
+                });
                 favBtn.innerText = '★';
                 favBtn.classList.replace('text-gray-300', 'text-yellow-400');
                 favBtn.classList.add('star-pop');
@@ -454,26 +491,21 @@
                 return;
             }
             filteredList.sort((a, b) => b.score - a.score);
-            container.innerHTML = filteredList.map((item, index) => {
-                const color = currentMarket === 'us' ? 'text-blue-600' : 'text-indigo-600';
-                const bg = currentMarket === 'us' ? 'bg-blue-50 text-blue-700' : 'bg-indigo-50 text-indigo-700';
-                const cat = getCategory(item.name, item.market);
-                return `<div class="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0 group">
-                    <span class="cursor-pointer group-hover:${color} transition flex items-center gap-2" onclick="updateStock('${item.name}', '${item.market || 'kr'}')">
-                        <span class="w-4 text-center text-xs font-bold text-gray-400">${index + 1}</span>
-                        <strong class="text-gray-800 group-hover:${color}">${item.name}</strong> 
-                        <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded hidden sm:inline">${cat}</span>
-                    </span>
-                    <span class="${bg} px-2 py-1 rounded-md font-bold text-xs shadow-sm">${item.score}점</span>
-                </div>`;
-            }).join('');
+            // 🌟 헬퍼 함수를 사용하여 리스트 렌더링
+            container.innerHTML = filteredList.map((item, index) => createListItemHTML(item, index, 'indigo', false)).join('');
         }
 
         function saveToMyRanking(data) {
             if (!data || !data.score) return;
             let history = JSON.parse(localStorage.getItem('myRanking')) || [];
             history = history.filter(item => item.name !== data.name);
-            history.push({ name: data.name, score: data.score, pbr: data.pbr, market: data.market });
+            history.push({ 
+                name: data.name, 
+                score: data.score, 
+                price: data.price,
+                change: data.change,
+                market: data.market 
+            });
             history.sort((a, b) => b.score - a.score);
             if (history.length > 50) history = history.slice(0, 50);
             localStorage.setItem('myRanking', JSON.stringify(history));
@@ -518,27 +550,17 @@
 
                 try {
                     let res = await fetch(`https://value-up-lens.onrender.com/api/stock/${encodeURIComponent(query)}?market=${currentMarket}`);
-                    if (res.ok) results.push(await res.json());
+                    if (res.ok) {
+                        let data = await res.json();
+                        data.change = getChangePercent(data); // 🌟 스캐너 데이터에도 등락률 주입!
+                        results.push(data);
+                    }
                 } catch (e) { console.log(e); }
             }
 
             results.sort((a, b) => b.score - a.score);
-            container.innerHTML = results.map((item, index) => {
-                let rankIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1;
-                const color = currentMarket === 'us' ? 'text-blue-600' : 'text-emerald-600';
-                const bg = currentMarket === 'us' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800';
-                const cat = getCategory(item.name, currentMarket);
-
-                return `
-                <div class="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0 group">
-                    <span class="cursor-pointer group-hover:${color} transition flex items-center gap-2" onclick="updateStock('${item.name}', '${currentMarket}')">
-                        <span class="w-5 text-center font-bold text-gray-400">${rankIcon}</span>
-                        <strong class="text-gray-800 group-hover:${color}">${item.name}</strong> 
-                        <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded hidden sm:inline">#${cat}</span>
-                    </span>
-                    <span class="${bg} px-2.5 py-1 rounded-md font-bold text-xs shadow-sm">${item.score}점</span>
-                </div>`;
-            }).join('');
+            // 🌟 헬퍼 함수를 사용하여 리스트 렌더링
+            container.innerHTML = results.map((item, index) => createListItemHTML(item, index, 'emerald', true)).join('');
             
             btn.innerText = '스캐너 재실행';
             btn.classList.remove('opacity-50', 'cursor-not-allowed');
