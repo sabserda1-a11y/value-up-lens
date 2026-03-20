@@ -15,7 +15,6 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        /* 별 애니메이션 */
         .star-pop { animation: pop 0.3s ease-in-out; }
         @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.4); } 100% { transform: scale(1); } }
     </style>
@@ -34,6 +33,7 @@
                 </div>
                 <button id="searchBtn" onclick="updateStock()" class="w-full md:w-32 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition shadow-md">분석하기</button>
             </div>
+            <p class="text-xs text-gray-400 mt-2">* 해외 주식은 영어 티커(예: AAPL)로 검색하는 것이 가장 정확합니다.</p>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -44,12 +44,10 @@
                             <span id="marketBadge" class="text-xs px-2 py-1 bg-indigo-100 text-indigo-700 font-bold rounded-md">국내</span>
                             <span id="categoryBadge" class="text-xs px-2 py-1 bg-gray-100 text-gray-600 font-bold rounded-md hidden">기타</span>
                         </div>
-                        
                         <div class="flex items-center gap-2">
                             <h2 id="displayStockName" class="text-2xl font-bold text-gray-800">대기 중...</h2>
                             <button id="favBtn" onclick="toggleFavorite()" class="text-2xl text-gray-300 hover:text-yellow-400 transition-colors focus:outline-none hidden" title="즐겨찾기 추가/해제">☆</button>
                         </div>
-
                         <div class="flex items-baseline gap-3 mt-1">
                             <p id="displayPrice" class="text-4xl font-extrabold tracking-tight">-</p>
                             <div id="priceChangeInfo" class="text-sm font-bold hidden items-baseline gap-1">
@@ -107,22 +105,6 @@
                     <h3 class="font-bold text-indigo-900 mb-3 text-sm">리코더의 최종 전략</h3>
                     <p id="recorderGuide" class="text-sm text-indigo-700 leading-relaxed">종목 코드를 입력하고 분석하기를 눌러주세요.</p>
                 </div>
-
-                <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
-                    <h3 class="font-bold text-gray-800 text-sm flex items-center justify-between cursor-pointer select-none" onclick="document.getElementById('scoreGuideDetail').classList.toggle('hidden')">
-                        <span>🏆 리코더 밸류업 등급표</span>
-                        <span class="text-xs bg-gray-100 px-2 py-1 rounded-md text-gray-500 hover:bg-gray-200 transition">열기/닫기 ▼</span>
-                    </h3>
-                    <div id="scoreGuideDetail" class="hidden text-xs text-gray-600 space-y-2 mt-4 pt-3 border-t border-gray-100 leading-relaxed">
-                        <p><span class="font-bold text-red-500">🔥 90점 이상:</span> 만점에 가까운 완벽한 주식</p>
-                        <p><span class="font-bold text-orange-500">💎 80점 이상:</span> 초특급 저평가 우량주</p>
-                        <p><span class="font-bold text-yellow-500">✨ 75점 이상:</span> 매력적인 저평가 우량주</p>
-                        <p><span class="font-bold text-green-500">👍 60점 이상:</span> 펀더멘탈이 양호한 가치주</p>
-                        <p><span class="font-bold text-blue-500">⚖️ 50점 이상:</span> 적정 가치 수준 (관망)</p>
-                        <p><span class="font-bold text-gray-500">⚠️ 40점 이상:</span> 다소 고평가 또는 수익성 부진</p>
-                        <p><span class="font-bold text-gray-800">🚨 40점 미만:</span> 심각한 고평가 또는 적자 상태</p>
-                    </div>
-                </div>
             </div>
         </div>
 
@@ -137,15 +119,27 @@
             </div>
 
             <div class="flex-[1.5] bg-white p-6 rounded-2xl shadow-sm border border-gray-200 flex flex-col">
-                <div class="flex justify-between items-center mb-1">
-                    <h3 id="scannerTitle" class="text-lg font-bold text-emerald-700">🔭 국내 밸류업 스캐너 (Top 20)</h3>
-                    <button onclick="runScanner()" id="scannerBtn" class="text-xs px-3 py-1.5 bg-emerald-500 text-white rounded-lg font-bold hover:bg-emerald-600 transition">
-                        실시간 스캔 시작
-                    </button>
+                <div class="flex space-x-4 border-b border-gray-100 mb-4 pb-2">
+                    <button onclick="setRightTab('scanner')" id="tab-scanner" class="text-sm font-bold text-emerald-600 border-b-2 border-emerald-600 pb-1 transition">🔭 실시간 스캐너</button>
+                    <button onclick="setRightTab('category')" id="tab-category" class="text-sm font-bold text-gray-400 pb-1 hover:text-gray-600 transition">🏷️ 테마별 모아보기</button>
                 </div>
-                <p id="scannerDesc" class="text-xs text-gray-500 mb-4">한국 우량주 20개의 실시간 밸류업 순위를 스캔합니다.</p>
-                <div id="scannerList" class="text-sm text-gray-600 space-y-2 flex-1 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
-                    <div class="text-center py-10 text-gray-400">우측 상단의 <strong class="text-emerald-500">스캔 시작</strong> 버튼을 눌러주세요!</div>
+                
+                <div id="scannerArea" class="flex flex-col flex-1">
+                    <div class="flex justify-between items-center mb-2">
+                        <p id="scannerDesc" class="text-xs text-gray-500">한국 우량주 실시간 밸류업 스캔</p>
+                        <button onclick="runScanner()" id="scannerBtn" class="text-xs px-3 py-1.5 bg-emerald-500 text-white rounded-lg font-bold hover:bg-emerald-600 transition">스캔 시작</button>
+                    </div>
+                    <div id="scannerList" class="text-sm text-gray-600 space-y-2 flex-1 max-h-[350px] overflow-y-auto custom-scrollbar pr-2">
+                        <div class="text-center py-10 text-gray-400">우측 상단의 <strong class="text-emerald-500">스캔 시작</strong> 버튼을 눌러주세요!</div>
+                    </div>
+                </div>
+
+                <div id="categoryArea" class="hidden flex-col flex-1">
+                    <p class="text-xs text-gray-500 mb-3">관심 있는 섹터(테마)를 선택하면 관련 우량주를 모아볼 수 있습니다.</p>
+                    <div id="categoryPills" class="flex flex-wrap gap-2 mb-4"></div>
+                    <div id="categoryStockList" class="text-sm text-gray-600 space-y-2 flex-1 max-h-[250px] overflow-y-auto custom-scrollbar pr-2 border-t border-gray-100 pt-3">
+                        <div class="text-center py-10 text-gray-400">위에서 테마 버튼을 클릭해주세요!</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -164,64 +158,134 @@
         let isCoolingDown = false;
         const COOL_DOWN_TIME = 8000;
         let currentMarket = 'kr';
-        let currentListTab = 'history'; // history 또는 favorite
-        let currentViewedStock = null; // 현재 보고 있는 주식 전체 데이터 객체
+        let currentListTab = 'history'; 
+        let currentRightTab = 'scanner'; 
+        let currentViewedStock = null; 
 
-        // 🌟 기획자표 미니 백과사전 (종목별 카테고리 매핑)
-        const CATEGORY_MAP = {
-            // 🇰🇷 국내
-            '삼성전자': '반도체', 'SK하이닉스': '반도체', '한미반도체': '반도체',
-            '현대차': '자동차', '기아': '자동차', '기아차': '자동차', '현대모비스': '자동차',
-            'KB금융': '금융', '신한지주': '금융', '하나금융지주': '금융', '메리츠금융지주': '금융', '기업은행': '금융', '삼성화재': '금융',
-            'NAVER': 'IT/플랫폼', '네이버': 'IT/플랫폼', '카카오': 'IT/플랫폼', '엔씨소프트': '게임', '크래프톤': '게임',
-            'LG화학': '화학/2차전지', 'POSCO홀딩스': '철강/소재', '에코프로': '2차전지', '에코프로비엠': '2차전지',
-            '한국전력': '유틸리티', 'SK텔레콤': '통신', 'KT': '통신', 'HMM': '해운', '대한항공': '항공',
-            '삼성물산': '지주사', '루닛': '의료AI', '삼양식품': '식음료', '파마리서치': '바이오/의료기기', '셀트리온': '제약/바이오',
-            // 🇺🇸 해외
-            'AAPL': 'IT/기기', '애플': 'IT/기기', 'MSFT': '소프트웨어', '마이크로소프트': '소프트웨어',
-            'GOOGL': 'IT/플랫폼', '구글': 'IT/플랫폼', 'AMZN': '이커머스', '아마존': '이커머스',
-            'META': '소셜미디어', '메타': '소셜미디어', 'TSLA': '전기차', '테슬라': '전기차',
-            'NVDA': '반도체', '엔비디아': '반도체', 'AMD': '반도체', 'TSM': '반도체', 'INTC': '반도체', 'QCOM': '반도체', 'AVGO': '반도체',
-            'BRK.B': '금융/지주', '버크셔해서웨이': '금융/지주', 'LLY': '제약/바이오', '일라이릴리': '제약/바이오', 'NVO': '제약/바이오',
-            'NFLX': '미디어', '넷플릭스': '미디어', 'PEP': '식음료', 'KO': '식음료', '코카콜라': '식음료', 'SBUX': '식음료',
-            'DIS': '엔터테인먼트', '디즈니': '엔터테인먼트', 'COST': '유통', 'PLTR': '소프트웨어', 'COIN': '가상화폐'
+        // 🌟 통합 유니버스 & 카테고리 맵 (스캐너와 카테고리를 동시 지원!)
+        const STOCK_UNIVERSE = {
+            kr: [
+                { name: '삼성전자', cat: '반도체' }, { name: 'SK하이닉스', cat: '반도체' }, { name: '한미반도체', cat: '반도체' },
+                { name: '현대차', cat: '자동차' }, { name: '기아', cat: '자동차' }, { name: '현대모비스', cat: '자동차' },
+                { name: 'KB금융', cat: '금융' }, { name: '신한지주', cat: '금융' }, { name: '하나금융지주', cat: '금융' }, { name: '메리츠금융지주', cat: '금융' }, { name: '삼성화재', cat: '금융' },
+                { name: 'NAVER', cat: 'IT/플랫폼' }, { name: '카카오', cat: 'IT/플랫폼' }, { name: '엔씨소프트', cat: '게임' },
+                { name: 'LG화학', cat: '2차전지/화학' }, { name: '에코프로', cat: '2차전지/화학' },
+                { name: 'POSCO홀딩스', cat: '철강/소재' }, { name: '한국전력', cat: '유틸리티' },
+                { name: 'SK텔레콤', cat: '통신' }, { name: '대한항공', cat: '항공/해운' }, { name: 'HMM', cat: '항공/해운' },
+                { name: '삼성물산', cat: '지주사' }, { name: '루닛', cat: '의료AI' },
+                { name: '삼양식품', cat: '식음료' }, { name: '파마리서치', cat: '바이오/의료기기' }, { name: '셀트리온', cat: '제약/바이오' }
+            ],
+            us: [
+                { name: 'AAPL', cat: 'IT/기기' }, { name: 'MSFT', cat: '소프트웨어' }, { name: 'PLTR', cat: '소프트웨어' },
+                { name: 'GOOGL', cat: 'IT/플랫폼' }, { name: 'AMZN', cat: '이커머스' }, { name: 'META', cat: '소셜미디어' },
+                { name: 'TSLA', cat: '전기차' }, { name: 'NVDA', cat: '반도체' }, { name: 'AMD', cat: '반도체' }, { name: 'TSM', cat: '반도체' }, { name: 'QCOM', cat: '반도체' },
+                { name: 'BRK.B', cat: '금융/지주' }, { name: 'LLY', cat: '제약/바이오' }, { name: 'NVO', cat: '제약/바이오' },
+                { name: 'NFLX', cat: '미디어' }, { name: 'PEP', cat: '식음료' }, { name: 'KO', cat: '식음료' },
+                { name: 'DIS', cat: '엔터테인먼트' }, { name: 'COST', cat: '유통' }, { name: 'COIN', cat: '가상화폐' }
+            ]
         };
 
-        function getCategory(name) {
-            return CATEGORY_MAP[name.toUpperCase()] || CATEGORY_MAP[name] || '기타';
+        // 빠른 검색을 위한 헬퍼 함수
+        function getCategory(name, market) {
+            const list = STOCK_UNIVERSE[market || currentMarket];
+            const found = list.find(s => s.name.toUpperCase() === name.toUpperCase() || s.name === name);
+            return found ? found.cat : '기타';
         }
 
+        // ==========================================
+        // UI 스위칭 함수 모음
+        // ==========================================
         function setMarket(market) {
             currentMarket = market;
             const tabKr = document.getElementById('tab-kr');
             const tabUs = document.getElementById('tab-us');
             const searchInput = document.getElementById('stockSearch');
-
             searchInput.value = '';
 
             if (market === 'kr') {
                 tabKr.className = "flex-1 py-2 text-sm font-bold rounded-lg bg-white shadow-sm text-indigo-600 transition duration-200";
                 tabUs.className = "flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-200 transition duration-200";
                 searchInput.placeholder = "국내 주식 이름 또는 코드 (예: 삼성전자, 005380)";
-                document.getElementById('scannerTitle').innerText = '🔭 국내 밸류업 스캐너 (Top 20)';
-                document.getElementById('scannerDesc').innerText = '한국 우량주 20개의 실시간 밸류업 순위를 스캔합니다.';
+                document.getElementById('scannerDesc').innerText = '한국 우량주 실시간 밸류업 스캔';
             } else {
                 tabUs.className = "flex-1 py-2 text-sm font-bold rounded-lg bg-white shadow-sm text-indigo-600 transition duration-200";
                 tabKr.className = "flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-200 transition duration-200";
                 searchInput.placeholder = "해외 주식 이름 또는 티커 (예: 애플, AAPL, 테슬라)";
-                document.getElementById('scannerTitle').innerText = '🔭 해외 밸류업 스캐너 (Top 20)';
-                document.getElementById('scannerDesc').innerText = '미국 우량주 20개의 실시간 밸류업 순위를 스캔합니다.';
+                document.getElementById('scannerDesc').innerText = '미국 우량주 실시간 밸류업 스캔';
             }
             document.getElementById('scannerList').innerHTML = '<div class="text-center py-10 text-gray-400">우측 상단의 <strong class="text-emerald-500">스캔 시작</strong> 버튼을 눌러주세요!</div>';
             renderBottomList(); 
+            if (currentRightTab === 'category') renderCategoryPills(); // 카테고리 탭 리프레시
         }
 
-        function rotateMessages() {
-            const messages = ["데이터를 수집하고 있습니다...", "적정 가치를 계산 중입니다...", "차트를 생성하고 있습니다..."];
-            let i = 0;
-            return setInterval(() => { document.getElementById('loadingMessage').innerText = messages[i % messages.length]; i++; }, 3000);
+        function setListTab(tabName) {
+            currentListTab = tabName;
+            document.getElementById('tab-history').className = tabName === 'history' ? "text-sm font-bold text-indigo-600 border-b-2 border-indigo-600 pb-1 transition" : "text-sm font-bold text-gray-400 pb-1 hover:text-gray-600 transition";
+            document.getElementById('tab-favorite').className = tabName === 'favorite' ? "text-sm font-bold text-yellow-500 border-b-2 border-yellow-500 pb-1 transition" : "text-sm font-bold text-gray-400 pb-1 hover:text-gray-600 transition";
+            renderBottomList();
         }
 
+        // 🌟 우측 하단 탭 (스캐너 vs 테마별 모아보기) 스위칭
+        function setRightTab(tabName) {
+            currentRightTab = tabName;
+            const tScan = document.getElementById('tab-scanner');
+            const tCat = document.getElementById('tab-category');
+            const aScan = document.getElementById('scannerArea');
+            const aCat = document.getElementById('categoryArea');
+
+            if (tabName === 'scanner') {
+                tScan.className = "text-sm font-bold text-emerald-600 border-b-2 border-emerald-600 pb-1 transition";
+                tCat.className = "text-sm font-bold text-gray-400 pb-1 hover:text-gray-600 transition";
+                aScan.classList.replace('hidden', 'flex');
+                aCat.classList.replace('flex', 'hidden');
+            } else {
+                tCat.className = "text-sm font-bold text-emerald-600 border-b-2 border-emerald-600 pb-1 transition";
+                tScan.className = "text-sm font-bold text-gray-400 pb-1 hover:text-gray-600 transition";
+                aCat.classList.replace('hidden', 'flex');
+                aScan.classList.replace('flex', 'hidden');
+                renderCategoryPills();
+            }
+        }
+
+        // ==========================================
+        // 카테고리 (테마) 렌더링 로직
+        // ==========================================
+        function renderCategoryPills() {
+            const container = document.getElementById('categoryPills');
+            const universe = STOCK_UNIVERSE[currentMarket];
+            const categories = [...new Set(universe.map(item => item.cat))]; // 중복 제거
+
+            container.innerHTML = categories.map(cat => `
+                <button onclick="selectCategory('${cat}')" class="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-full hover:bg-emerald-100 hover:text-emerald-700 transition focus:outline-none focus:ring-2 focus:ring-emerald-300">
+                    #${cat}
+                </button>
+            `).join('');
+            
+            document.getElementById('categoryStockList').innerHTML = '<div class="text-center py-10 text-gray-400">위에서 테마 뱃지를 클릭해주세요!</div>';
+        }
+
+        function selectCategory(catName) {
+            const listContainer = document.getElementById('categoryStockList');
+            const universe = STOCK_UNIVERSE[currentMarket];
+            const stocks = universe.filter(item => item.cat === catName);
+            const color = currentMarket === 'us' ? 'text-blue-600' : 'text-indigo-600';
+
+            listContainer.innerHTML = stocks.map(item => `
+                <div class="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0 group">
+                    <span class="flex items-center gap-2">
+                        <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">#${catName}</span>
+                        <strong class="text-gray-800">${item.name}</strong> 
+                    </span>
+                    <button onclick="updateStock('${item.name}', '${currentMarket}')" class="text-[10px] font-bold bg-gray-100 text-gray-500 px-3 py-1.5 rounded-md hover:bg-emerald-100 hover:text-emerald-700 transition">
+                        분석하기 🔍
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // ==========================================
+        // 메인 분석 및 즐겨찾기 로직
+        // ==========================================
         function getScoreTooltipText(score, pbr, per, roe) {
             let title = score >= 90 ? "🔥 90점 이상: 완벽한 주식!" : score >= 80 ? "💎 80점 이상: 초특급 저평가" : score >= 75 ? "✨ 75점 이상: 매력적" : score >= 60 ? "👍 60점 이상: 양호" : score >= 50 ? "⚖️ 50점 이상: 관망" : score >= 40 ? "⚠️ 40점 이상: 다소 고평가" : "🚨 40점 미만: 주의";
             let pbrScore = pbr > 0 ? (pbr <= 0.8 ? 20 : pbr <= 1.2 ? 15 : pbr <= 1.5 ? 10 : pbr >= 3.0 ? -10 : 0) : 0;
@@ -240,11 +304,7 @@
             const btn = document.getElementById('searchBtn');
             const query = autoQuery || queryInput.value.trim();
             
-            if (autoMarket && autoMarket !== currentMarket) {
-                setMarket(autoMarket);
-                queryInput.value = query;
-            }
-
+            if (autoMarket && autoMarket !== currentMarket) { setMarket(autoMarket); queryInput.value = query; }
             if (!query) return alert("검색어를 입력해주세요!");
             if (isCoolingDown) return alert("엔진 식는 중! 잠시만 대기해주세요.");
 
@@ -253,28 +313,24 @@
 
             document.getElementById('loadingOverlay').classList.replace('hidden', 'flex');
             document.getElementById('priceChangeInfo').classList.add('hidden');
-            const msgInterval = rotateMessages();
+            let i = 0; const messages = ["데이터 수집 중...", "적정 가치 계산 중...", "차트 생성 중..."];
+            const msgInterval = setInterval(() => { document.getElementById('loadingMessage').innerText = messages[i % messages.length]; i++; }, 3000);
 
             try {
-                isCoolingDown = true;
-                btn.disabled = true;
-                btn.innerText = "분석 중...";
-
-                const url = `https://value-up-lens.onrender.com/api/stock/${encodeURIComponent(query)}?market=${currentMarket}`;
-                const response = await fetch(url);
-                if (!response.ok) throw new Error((await response.json()).detail || "서버 응답 에러");
+                isCoolingDown = true; btn.disabled = true; btn.innerText = "분석 중...";
+                const response = await fetch(`https://value-up-lens.onrender.com/api/stock/${encodeURIComponent(query)}?market=${currentMarket}`);
+                if (!response.ok) throw new Error((await response.json()).detail || "서버 에러");
                 
                 const data = await response.json();
-                data.market = currentMarket; // 데이터에 현재 시장 정보 주입
-                currentViewedStock = data; // 🌟 현재 보고 있는 주식 저장 (즐겨찾기용)
+                data.market = currentMarket; 
+                currentViewedStock = data; 
                 const currency = data.currency || "원";
 
-                // 시장 & 카테고리 배지 업데이트
+                // 배지 업데이트
                 document.getElementById('marketBadge').innerText = currentMarket === 'kr' ? '🇰🇷 국내' : '🇺🇸 해외';
                 document.getElementById('marketBadge').className = currentMarket === 'kr' ? "text-xs px-2 py-1 bg-indigo-100 text-indigo-700 font-bold rounded-md" : "text-xs px-2 py-1 bg-blue-100 text-blue-700 font-bold rounded-md";
-                
                 const catBadge = document.getElementById('categoryBadge');
-                catBadge.innerText = getCategory(data.name);
+                catBadge.innerText = getCategory(data.name, currentMarket);
                 catBadge.classList.remove('hidden');
 
                 document.getElementById('displayStockName').innerText = data.name;
@@ -285,9 +341,8 @@
                 document.getElementById('valueScore').innerText = data.score || 50;
                 document.getElementById('scoreTooltip').innerHTML = getScoreTooltipText(data.score||50, data.pbr, data.per, data.roe);
 
-                // 즐겨찾기 버튼(별) 상태 업데이트 & 노출
-                const favBtn = document.getElementById('favBtn');
-                favBtn.classList.remove('hidden');
+                // 즐겨찾기 버튼 업데이트
+                document.getElementById('favBtn').classList.remove('hidden');
                 checkFavoriteStatus();
 
                 if (data.trend && data.trend.length >= 2 && data.price) {
@@ -306,11 +361,11 @@
 
                 updateChart(data.trend, data.dates, currency);
                 updateGuideByScore(data.score, data.name);
-                saveToMyRanking(data); // 검색 기록 저장
+                saveToMyRanking(data);
 
             } catch (error) {
                 alert("분석 실패: " + error.message);
-                document.getElementById('recorderGuide').innerText = "해당 시장(국내/해외) 탭이 맞는지 확인해주세요.";
+                document.getElementById('recorderGuide').innerText = "시장 탭(국내/해외)을 다시 확인해주세요.";
             } finally {
                 clearInterval(msgInterval);
                 document.getElementById('loadingOverlay').classList.replace('flex', 'hidden');
@@ -318,41 +373,25 @@
             }
         }
 
-        // ==========================================
-        // 🌟 즐겨찾기 (⭐) 핵심 로직
-        // ==========================================
+        // 즐겨찾기 추가/해제
         function toggleFavorite() {
             if (!currentViewedStock) return;
             const favBtn = document.getElementById('favBtn');
             let favorites = JSON.parse(localStorage.getItem('myFavorites')) || [];
-            
-            // 이미 즐겨찾기에 있는지 확인
             const isExist = favorites.findIndex(item => item.name === currentViewedStock.name && item.market === currentViewedStock.market);
             
             if (isExist > -1) {
-                // 있으면 삭제 (별 끄기)
                 favorites.splice(isExist, 1);
                 favBtn.innerText = '☆';
                 favBtn.classList.replace('text-yellow-400', 'text-gray-300');
             } else {
-                // 없으면 추가 (별 켜기 & 애니메이션)
-                favorites.push({
-                    name: currentViewedStock.name,
-                    score: currentViewedStock.score,
-                    pbr: currentViewedStock.pbr,
-                    market: currentViewedStock.market
-                });
+                favorites.push({ name: currentViewedStock.name, score: currentViewedStock.score, pbr: currentViewedStock.pbr, market: currentViewedStock.market });
                 favBtn.innerText = '★';
                 favBtn.classList.replace('text-gray-300', 'text-yellow-400');
-                
-                // 팝 애니메이션 추가 후 제거
                 favBtn.classList.add('star-pop');
                 setTimeout(() => favBtn.classList.remove('star-pop'), 300);
             }
-            
             localStorage.setItem('myFavorites', JSON.stringify(favorites));
-            
-            // 만약 현재 즐겨찾기 탭을 보고 있다면 화면 즉시 업데이트
             if (currentListTab === 'favorite') renderBottomList();
         }
 
@@ -361,61 +400,29 @@
             const favBtn = document.getElementById('favBtn');
             let favorites = JSON.parse(localStorage.getItem('myFavorites')) || [];
             const isExist = favorites.some(item => item.name === currentViewedStock.name && item.market === currentViewedStock.market);
-            
-            if (isExist) {
-                favBtn.innerText = '★';
-                favBtn.classList.replace('text-gray-300', 'text-yellow-400');
-            } else {
-                favBtn.innerText = '☆';
-                favBtn.classList.replace('text-yellow-400', 'text-gray-300');
-            }
-        }
-
-        // ==========================================
-        // 🌟 하단 리스트 탭(검색 기록 / 즐겨찾기) 스위칭 로직
-        // ==========================================
-        function setListTab(tabName) {
-            currentListTab = tabName;
-            const tabHistory = document.getElementById('tab-history');
-            const tabFavorite = document.getElementById('tab-favorite');
-            
-            if (tabName === 'history') {
-                tabHistory.className = "text-sm font-bold text-indigo-600 border-b-2 border-indigo-600 pb-1 transition";
-                tabFavorite.className = "text-sm font-bold text-gray-400 pb-1 hover:text-gray-600 transition";
-            } else {
-                tabFavorite.className = "text-sm font-bold text-yellow-500 border-b-2 border-yellow-500 pb-1 transition";
-                tabHistory.className = "text-sm font-bold text-gray-400 pb-1 hover:text-gray-600 transition";
-            }
-            renderBottomList();
+            if (isExist) { favBtn.innerText = '★'; favBtn.classList.replace('text-gray-300', 'text-yellow-400'); } 
+            else { favBtn.innerText = '☆'; favBtn.classList.replace('text-yellow-400', 'text-gray-300'); }
         }
 
         function renderBottomList() {
             const container = document.getElementById('bottomListContainer');
-            const targetStorage = currentListTab === 'history' ? 'myRanking' : 'myFavorites';
-            let listData = JSON.parse(localStorage.getItem(targetStorage)) || [];
-            
-            // 현재 선택된 시장(국내/해외)에 맞는 것만 보여주기
+            const listData = JSON.parse(localStorage.getItem(currentListTab === 'history' ? 'myRanking' : 'myFavorites')) || [];
             const filteredList = listData.filter(item => (item.market || 'kr') === currentMarket);
             
             if (filteredList.length === 0) {
-                const emptyMsg = currentListTab === 'history' ? '검색 기록이 없습니다. 먼저 주식을 검색해보세요!' : '즐겨찾기한 종목이 없습니다. 별(⭐)을 눌러 추가해보세요!';
-                container.innerHTML = `<div class="text-gray-400 py-8 text-center">${emptyMsg}</div>`;
+                container.innerHTML = `<div class="text-gray-400 py-8 text-center">${currentListTab === 'history' ? '검색 기록이 없습니다.' : '즐겨찾기한 종목이 없습니다. 별(⭐)을 눌러 추가해보세요!'}</div>`;
                 return;
             }
-
-            // 점수순으로 예쁘게 정렬
             filteredList.sort((a, b) => b.score - a.score);
-
             container.innerHTML = filteredList.map((item, index) => {
                 const color = currentMarket === 'us' ? 'text-blue-600' : 'text-indigo-600';
                 const bg = currentMarket === 'us' ? 'bg-blue-50 text-blue-700' : 'bg-indigo-50 text-indigo-700';
-                const category = getCategory(item.name);
-                
+                const cat = getCategory(item.name, item.market);
                 return `<div class="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0 group">
                     <span class="cursor-pointer group-hover:${color} transition flex items-center gap-2" onclick="updateStock('${item.name}', '${item.market || 'kr'}')">
                         <span class="w-4 text-center text-xs font-bold text-gray-400">${index + 1}</span>
                         <strong class="text-gray-800 group-hover:${color}">${item.name}</strong> 
-                        <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded ml-1 hidden sm:inline">${category}</span>
+                        <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded hidden sm:inline">${cat}</span>
                     </span>
                     <span class="${bg} px-2 py-1 rounded-md font-bold text-xs shadow-sm">${item.score}점</span>
                 </div>`;
@@ -430,8 +437,6 @@
             history.sort((a, b) => b.score - a.score);
             if (history.length > 50) history = history.slice(0, 50);
             localStorage.setItem('myRanking', JSON.stringify(history));
-            
-            // 현재 히스토리 탭을 보고 있다면 즉시 렌더링
             if (currentListTab === 'history') renderBottomList();
         }
 
@@ -458,22 +463,12 @@
         async function runScanner() {
             const btn = document.getElementById('scannerBtn');
             const container = document.getElementById('scannerList');
+            btn.disabled = true; btn.classList.add('opacity-50', 'cursor-not-allowed');
             
-            btn.disabled = true;
-            btn.classList.add('opacity-50', 'cursor-not-allowed');
-            
-            const krUniverse = ['삼성전자', 'SK하이닉스', '현대차', '기아', 'KB금융', '신한지주', '하나금융지주', '메리츠금융지주', '삼성물산', 'POSCO홀딩스', 'LG화학', '현대모비스', '한국전력', 'SK텔레콤', 'KT', '기업은행', 'HMM', '삼성화재', '대한항공', '엔씨소프트'];
-            const usUniverse = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'BRK.B', 'TSM', 'LLY', 'AVGO', 'NVO', 'ASML', 'NFLX', 'AMD', 'QCOM', 'INTC', 'PEP', 'KO', 'COST'];
-            
-            const universe = currentMarket === 'kr' ? krUniverse : usUniverse;
+            const universe = STOCK_UNIVERSE[currentMarket].slice(0, 20).map(s => s.name); // 각 시장별 최상위 20개 종목 추출
             let results = [];
 
-            container.innerHTML = `
-                <div class="flex flex-col items-center justify-center py-10 space-y-4">
-                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
-                    <div id="scanStatus" class="text-emerald-600 font-bold animate-pulse">엔진 예열 중...</div>
-                </div>
-            `;
+            container.innerHTML = `<div class="flex flex-col items-center justify-center py-10 space-y-4"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div><div id="scanStatus" class="text-emerald-600 font-bold animate-pulse">엔진 예열 중...</div></div>`;
             const statusEl = document.getElementById('scanStatus');
 
             for (let i = 0; i < universe.length; i++) {
@@ -483,35 +478,26 @@
 
                 try {
                     let res = await fetch(`https://value-up-lens.onrender.com/api/stock/${encodeURIComponent(query)}?market=${currentMarket}`);
-                    if (res.ok) {
-                        let data = await res.json();
-                        results.push(data);
-                    }
+                    if (res.ok) results.push(await res.json());
                 } catch (e) { console.log(e); }
             }
 
             results.sort((a, b) => b.score - a.score);
-
             container.innerHTML = results.map((item, index) => {
-                let rankIcon = index + 1;
-                if (index === 0) rankIcon = '🥇';
-                if (index === 1) rankIcon = '🥈';
-                if (index === 2) rankIcon = '🥉';
-
+                let rankIcon = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1;
                 const color = currentMarket === 'us' ? 'text-blue-600' : 'text-emerald-600';
                 const bg = currentMarket === 'us' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800';
-                const category = getCategory(item.name);
+                const cat = getCategory(item.name, currentMarket);
 
                 return `
                 <div class="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0 group">
                     <span class="cursor-pointer group-hover:${color} transition flex items-center gap-2" onclick="updateStock('${item.name}', '${currentMarket}')">
                         <span class="w-5 text-center font-bold text-gray-400">${rankIcon}</span>
                         <strong class="text-gray-800 group-hover:${color}">${item.name}</strong> 
-                        <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded hidden sm:inline">${category}</span>
+                        <span class="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded hidden sm:inline">${cat}</span>
                     </span>
                     <span class="${bg} px-2.5 py-1 rounded-md font-bold text-xs shadow-sm">${item.score}점</span>
-                </div>
-                `;
+                </div>`;
             }).join('');
             
             btn.innerText = '스캐너 재실행';
@@ -520,21 +506,11 @@
         }
 
         window.onload = () => {
-            document.getElementById('stockSearch').addEventListener('keypress', function (e) {
-                if (e.key === 'Enter') updateStock();
-            });
-
+            document.getElementById('stockSearch').addEventListener('keypress', function (e) { if (e.key === 'Enter') updateStock(); });
             const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('market')) setMarket(urlParams.get('market'));
-            else setMarket('kr'); // 초기 렌더링 세팅
-            
-            if (urlParams.get('code')) {
-                document.getElementById('stockSearch').value = urlParams.get('code');
-                updateStock();
-            } else {
-                document.getElementById('stockSearch').value = "삼성전자";
-                updateStock();
-            }
+            if (urlParams.get('market')) setMarket(urlParams.get('market')); else setMarket('kr');
+            if (urlParams.get('code')) { document.getElementById('stockSearch').value = urlParams.get('code'); updateStock(); } 
+            else { document.getElementById('stockSearch').value = "삼성전자"; updateStock(); }
         };
     </script>
 </body>
