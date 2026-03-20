@@ -107,6 +107,22 @@
                     <h3 class="font-bold text-indigo-900 mb-3 text-sm">리코더의 최종 전략</h3>
                     <p id="recorderGuide" class="text-sm text-indigo-700 leading-relaxed">종목 코드를 입력하고 분석하기를 눌러주세요.</p>
                 </div>
+
+                <div class="bg-white p-5 rounded-3xl shadow-sm border border-gray-100">
+                    <h3 class="font-bold text-gray-800 text-sm flex items-center justify-between cursor-pointer select-none" onclick="document.getElementById('scoreGuideDetail').classList.toggle('hidden')">
+                        <span>🏆 리코더 밸류업 등급표</span>
+                        <span class="text-xs bg-gray-100 px-2 py-1 rounded-md text-gray-500 hover:bg-gray-200 transition">열기/닫기 ▼</span>
+                    </h3>
+                    <div id="scoreGuideDetail" class="hidden text-xs text-gray-600 space-y-2 mt-4 pt-3 border-t border-gray-100 leading-relaxed">
+                        <p><span class="font-bold text-red-500">🔥 90점 이상:</span> 만점에 가까운 완벽한 주식</p>
+                        <p><span class="font-bold text-orange-500">💎 80점 이상:</span> 초특급 저평가 우량주</p>
+                        <p><span class="font-bold text-yellow-500">✨ 75점 이상:</span> 매력적인 저평가 우량주</p>
+                        <p><span class="font-bold text-green-500">👍 60점 이상:</span> 펀더멘탈이 양호한 가치주</p>
+                        <p><span class="font-bold text-blue-500">⚖️ 50점 이상:</span> 적정 가치 수준 (관망)</p>
+                        <p><span class="font-bold text-gray-500">⚠️ 40점 이상:</span> 다소 고평가 또는 수익성 부진</p>
+                        <p><span class="font-bold text-gray-800">🚨 40점 미만:</span> 심각한 고평가 또는 적자 상태</p>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -147,15 +163,16 @@
         let myChart;
         let isCoolingDown = false;
         const COOL_DOWN_TIME = 8000;
-        
-        let currentMarket = 'kr'; // 현재 활성화된 탭 상태
+        let currentMarket = 'kr';
 
-        // 🌟 핵심 기능: 탭 변경 시 전체 화면(검색, 랭킹, 스캐너) UI 스위칭!
         function setMarket(market) {
             currentMarket = market;
             const tabKr = document.getElementById('tab-kr');
             const tabUs = document.getElementById('tab-us');
             const searchInput = document.getElementById('stockSearch');
+
+            // 🌟 기획자님 요청 반영: 탭 이동 시 검색창 비워주기!
+            searchInput.value = '';
 
             if (market === 'kr') {
                 tabKr.className = "flex-1 py-2 text-sm font-bold rounded-lg bg-white shadow-sm text-indigo-600 transition duration-200";
@@ -173,7 +190,6 @@
                 document.getElementById('scannerDesc').innerText = '미국 우량주 20개의 실시간 밸류업 순위를 스캔합니다.';
             }
 
-            // 탭 변경 시 스캐너 리스트 초기화 및 랭킹 리스트 필터링
             document.getElementById('scannerList').innerHTML = '<div class="text-center py-10 text-gray-400">우측 상단의 <strong class="text-emerald-500">스캔 시작</strong> 버튼을 눌러주세요!</div>';
             renderMyRanking(); 
         }
@@ -205,9 +221,9 @@
             const btn = document.getElementById('searchBtn');
             const query = autoQuery || queryInput.value.trim();
             
-            // 나의 랭킹 등에서 클릭 시 탭 자동 전환
             if (autoMarket && autoMarket !== currentMarket) {
                 setMarket(autoMarket);
+                queryInput.value = query; // 탭 이동 후 비워진 검색창에 다시 채워넣기
             }
 
             if (!query) return alert("검색어를 입력해주세요!");
@@ -259,7 +275,7 @@
 
                 updateChart(data.trend, data.dates, currency);
                 updateGuideByScore(data.score, data.name);
-                saveToMyRanking(data, currentMarket); // 시장 정보와 함께 저장
+                saveToMyRanking(data, currentMarket);
 
             } catch (error) {
                 alert("분석 실패: " + error.message);
@@ -295,17 +311,15 @@
             if (!data || !data.score) return;
             let history = JSON.parse(localStorage.getItem('myRanking')) || [];
             history = history.filter(item => item.name !== data.name);
-            history.push({ name: data.name, score: data.score, pbr: data.pbr, market: market || 'kr' }); // market 정보 추가
+            history.push({ name: data.name, score: data.score, pbr: data.pbr, market: market || 'kr' });
             history.sort((a, b) => b.score - a.score);
-            if (history.length > 50) history = history.slice(0, 50); // 저장 개수 증가
+            if (history.length > 50) history = history.slice(0, 50);
             localStorage.setItem('myRanking', JSON.stringify(history));
             renderMyRanking();
         }
 
-        // 🌟 수정됨: 현재 탭(currentMarket)에 맞는 랭킹만 렌더링
         function renderMyRanking() {
             let history = JSON.parse(localStorage.getItem('myRanking')) || [];
-            // 현재 탭과 일치하는 내역만 필터링 (과거 기록이 market 없으면 kr로 간주)
             const filteredHistory = history.filter(item => (item.market || 'kr') === currentMarket);
             
             const container = document.getElementById('myRankingList');
@@ -328,7 +342,6 @@
             }).join('');
         }
 
-        // 🌟 수정됨: 국가별 스캐너 유니버스 분리! (빠른 스캔을 위해 각각 20개로 최적화)
         async function runScanner() {
             const btn = document.getElementById('scannerBtn');
             const container = document.getElementById('scannerList');
@@ -336,7 +349,6 @@
             btn.disabled = true;
             btn.classList.add('opacity-50', 'cursor-not-allowed');
             
-            // 국가별 우량주 풀 (해외는 영어 티커로 직접 쏴서 속도/정확도 100% 보장!)
             const krUniverse = ['삼성전자', 'SK하이닉스', '현대차', '기아', 'KB금융', '신한지주', '하나금융지주', '메리츠금융지주', '삼성물산', 'POSCO홀딩스', 'LG화학', '현대모비스', '한국전력', 'SK텔레콤', 'KT', '기업은행', 'HMM', '삼성화재', '대한항공', '엔씨소프트'];
             const usUniverse = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'BRK.B', 'TSM', 'LLY', 'AVGO', 'NVO', 'ASML', 'NFLX', 'AMD', 'QCOM', 'INTC', 'PEP', 'KO', 'COST'];
             
@@ -388,8 +400,10 @@
                 `;
             }).join('');
             
+            // 🌟 수정됨: 스캐너 완료 후 다시 누를 수 있도록 disabled 해제!
             btn.innerText = '스캐너 재실행';
             btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            btn.disabled = false; 
         }
 
         window.onload = () => {
@@ -400,9 +414,9 @@
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('market')) setMarket(urlParams.get('market'));
             
-            // 초기 렌더링 호출
             renderMyRanking(); 
 
+            // 초기 주소창 값에 맞춰 검색창 채우기
             if (urlParams.get('code')) {
                 document.getElementById('stockSearch').value = urlParams.get('code');
                 updateStock();
