@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Value-up Lens V3 | Global Tab Engine</title>
+    <title>Value-up Lens V3 | Global Dashboard</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap" rel="stylesheet">
@@ -14,13 +14,13 @@
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
 <body>
 
     <div class="max-w-5xl mx-auto space-y-6">
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-            
             <div class="flex space-x-2 bg-gray-100 p-1.5 rounded-xl mb-4 w-full md:w-64">
                 <button id="tab-kr" onclick="setMarket('kr')" class="flex-1 py-2 text-sm font-bold rounded-lg bg-white shadow-sm text-indigo-600 transition duration-200">
                     🇰🇷 국내
@@ -39,6 +39,7 @@
                     분석하기
                 </button>
             </div>
+            <p class="text-xs text-gray-400 mt-2">* 해외 주식은 영어 티커(예: AAPL)로 검색하는 것이 가장 정확합니다.</p>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -110,23 +111,24 @@
         </div>
 
         <div id="rankingArea" class="flex flex-col md:flex-row gap-6 mt-8">
-            <div class="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
-                <h3 class="text-lg font-bold text-indigo-900 mb-1">🥇 나의 관심종목 랭킹</h3>
-                <p class="text-xs text-gray-500 mb-4">내가 검색했던 종목들의 점수 순위입니다.</p>
-                <div id="myRankingList" class="text-sm text-gray-600 space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
-                    검색 기록이 없습니다. 먼저 주식을 검색해보세요!
+            <div class="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-gray-200 flex flex-col">
+                <div class="flex justify-between items-center mb-1">
+                    <h3 id="rankingTitle" class="text-lg font-bold text-indigo-900">🥇 국내 관심종목 랭킹</h3>
                 </div>
+                <p class="text-xs text-gray-500 mb-4">선택한 시장에서 내가 검색했던 종목들의 순위입니다.</p>
+                <div id="myRankingList" class="text-sm text-gray-600 space-y-2 flex-1 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                    </div>
             </div>
 
-            <div class="flex-[1.5] bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+            <div class="flex-[1.5] bg-white p-6 rounded-2xl shadow-sm border border-gray-200 flex flex-col">
                 <div class="flex justify-between items-center mb-1">
-                    <h3 class="text-lg font-bold text-emerald-700">🔭 실시간 밸류업 스캐너 (Top 30)</h3>
+                    <h3 id="scannerTitle" class="text-lg font-bold text-emerald-700">🔭 국내 밸류업 스캐너 (Top 20)</h3>
                     <button onclick="runScanner()" id="scannerBtn" class="text-xs px-3 py-1.5 bg-emerald-500 text-white rounded-lg font-bold hover:bg-emerald-600 transition">
                         실시간 스캔 시작
                     </button>
                 </div>
-                <p class="text-xs text-gray-500 mb-4">기획자가 선정한 글로벌 우량주 30개의 실시간 밸류업 순위를 스캔합니다.</p>
-                <div id="scannerList" class="text-sm text-gray-600 space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                <p id="scannerDesc" class="text-xs text-gray-500 mb-4">한국 우량주 20개의 실시간 밸류업 순위를 스캔합니다.</p>
+                <div id="scannerList" class="text-sm text-gray-600 space-y-2 flex-1 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
                     <div class="text-center py-10 text-gray-400">우측 상단의 <strong class="text-emerald-500">스캔 시작</strong> 버튼을 눌러주세요!</div>
                 </div>
             </div>
@@ -146,10 +148,9 @@
         let isCoolingDown = false;
         const COOL_DOWN_TIME = 8000;
         
-        // 🌟 현재 선택된 시장 상태 관리 ('kr' 또는 'us')
-        let currentMarket = 'kr';
+        let currentMarket = 'kr'; // 현재 활성화된 탭 상태
 
-        // 🌟 탭 클릭 시 UI 변경 및 상태 업데이트 함수
+        // 🌟 핵심 기능: 탭 변경 시 전체 화면(검색, 랭킹, 스캐너) UI 스위칭!
         function setMarket(market) {
             currentMarket = market;
             const tabKr = document.getElementById('tab-kr');
@@ -160,11 +161,30 @@
                 tabKr.className = "flex-1 py-2 text-sm font-bold rounded-lg bg-white shadow-sm text-indigo-600 transition duration-200";
                 tabUs.className = "flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-200 transition duration-200";
                 searchInput.placeholder = "국내 주식 이름 또는 코드 (예: 삼성전자, 005380)";
+                document.getElementById('rankingTitle').innerText = '🥇 국내 관심종목 랭킹';
+                document.getElementById('scannerTitle').innerText = '🔭 국내 밸류업 스캐너 (Top 20)';
+                document.getElementById('scannerDesc').innerText = '한국 우량주 20개의 실시간 밸류업 순위를 스캔합니다.';
             } else {
                 tabUs.className = "flex-1 py-2 text-sm font-bold rounded-lg bg-white shadow-sm text-indigo-600 transition duration-200";
                 tabKr.className = "flex-1 py-2 text-sm font-bold rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-200 transition duration-200";
                 searchInput.placeholder = "해외 주식 이름 또는 티커 (예: 애플, AAPL, 테슬라)";
+                document.getElementById('rankingTitle').innerText = '🥇 해외 관심종목 랭킹';
+                document.getElementById('scannerTitle').innerText = '🔭 해외 밸류업 스캐너 (Top 20)';
+                document.getElementById('scannerDesc').innerText = '미국 우량주 20개의 실시간 밸류업 순위를 스캔합니다.';
             }
+
+            // 탭 변경 시 스캐너 리스트 초기화 및 랭킹 리스트 필터링
+            document.getElementById('scannerList').innerHTML = '<div class="text-center py-10 text-gray-400">우측 상단의 <strong class="text-emerald-500">스캔 시작</strong> 버튼을 눌러주세요!</div>';
+            renderMyRanking(); 
+        }
+
+        function rotateMessages() {
+            const messages = ["데이터를 수집하고 있습니다...", "적정 가치를 계산 중입니다...", "차트를 생성하고 있습니다..."];
+            let i = 0;
+            return setInterval(() => {
+                document.getElementById('loadingMessage').innerText = messages[i % messages.length];
+                i++;
+            }, 3000);
         }
 
         function getScoreTooltipText(score, pbr, per, roe) {
@@ -185,24 +205,26 @@
             const btn = document.getElementById('searchBtn');
             const query = autoQuery || queryInput.value.trim();
             
-            // 자동 클릭이 들어오면 해당 탭으로 강제 이동!
-            if (autoMarket) setMarket(autoMarket);
+            // 나의 랭킹 등에서 클릭 시 탭 자동 전환
+            if (autoMarket && autoMarket !== currentMarket) {
+                setMarket(autoMarket);
+            }
 
             if (!query) return alert("검색어를 입력해주세요!");
-            if (isCoolingDown) return alert("엔진 식는 중! 8초만 대기해주세요.");
+            if (isCoolingDown) return alert("엔진 식는 중! 잠시만 대기해주세요.");
 
             const newUrl = window.location.pathname + `?market=${currentMarket}&code=` + encodeURIComponent(query);
             window.history.pushState({ path: newUrl }, '', newUrl);
 
             document.getElementById('loadingOverlay').classList.replace('hidden', 'flex');
             document.getElementById('priceChangeInfo').classList.add('hidden');
+            const msgInterval = rotateMessages();
 
             try {
                 isCoolingDown = true;
                 btn.disabled = true;
                 btn.innerText = "분석 중...";
 
-                // 🌟 백엔드 호출 시 ?market=kr 또는 ?market=us 를 붙여서 전송합니다!
                 const url = `https://value-up-lens.onrender.com/api/stock/${encodeURIComponent(query)}?market=${currentMarket}`;
                 const response = await fetch(url);
                 if (!response.ok) throw new Error((await response.json()).detail || "서버 응답 에러");
@@ -210,7 +232,6 @@
                 const data = await response.json();
                 const currency = data.currency || "원";
 
-                // 배지 및 텍스트 업데이트
                 document.getElementById('marketBadge').innerText = currentMarket === 'kr' ? '🇰🇷 국내' : '🇺🇸 해외';
                 document.getElementById('marketBadge').className = currentMarket === 'kr' ? "text-xs px-2 py-1 bg-indigo-100 text-indigo-700 font-bold rounded-md" : "text-xs px-2 py-1 bg-blue-100 text-blue-700 font-bold rounded-md";
                 
@@ -238,12 +259,13 @@
 
                 updateChart(data.trend, data.dates, currency);
                 updateGuideByScore(data.score, data.name);
-                saveToMyRanking(data, currentMarket);
+                saveToMyRanking(data, currentMarket); // 시장 정보와 함께 저장
 
             } catch (error) {
                 alert("분석 실패: " + error.message);
                 document.getElementById('recorderGuide').innerText = "해당 시장(국내/해외) 탭이 맞는지 확인해주세요.";
             } finally {
+                clearInterval(msgInterval);
                 document.getElementById('loadingOverlay').classList.replace('flex', 'hidden');
                 setTimeout(() => { isCoolingDown = false; btn.disabled = false; btn.innerText = "분석하기"; }, COOL_DOWN_TIME);
             }
@@ -269,47 +291,125 @@
             });
         }
 
-        // 🌟 랭킹에 시장(market) 정보도 같이 저장합니다!
         function saveToMyRanking(data, market) {
             if (!data || !data.score) return;
             let history = JSON.parse(localStorage.getItem('myRanking')) || [];
             history = history.filter(item => item.name !== data.name);
-            history.push({ name: data.name, score: data.score, pbr: data.pbr, market: market });
+            history.push({ name: data.name, score: data.score, pbr: data.pbr, market: market || 'kr' }); // market 정보 추가
             history.sort((a, b) => b.score - a.score);
-            if (history.length > 30) history = history.slice(0, 30);
+            if (history.length > 50) history = history.slice(0, 50); // 저장 개수 증가
             localStorage.setItem('myRanking', JSON.stringify(history));
             renderMyRanking();
         }
 
+        // 🌟 수정됨: 현재 탭(currentMarket)에 맞는 랭킹만 렌더링
         function renderMyRanking() {
             let history = JSON.parse(localStorage.getItem('myRanking')) || [];
+            // 현재 탭과 일치하는 내역만 필터링 (과거 기록이 market 없으면 kr로 간주)
+            const filteredHistory = history.filter(item => (item.market || 'kr') === currentMarket);
+            
             const container = document.getElementById('myRankingList');
-            if (history.length === 0) return;
-            container.innerHTML = history.map((item, index) => {
-                const flag = item.market === 'us' ? '🇺🇸' : '🇰🇷';
+            if (filteredHistory.length === 0) {
+                container.innerHTML = '<div class="text-gray-400 py-4 text-center">검색 기록이 없습니다. 먼저 주식을 검색해보세요!</div>';
+                return;
+            }
+
+            container.innerHTML = filteredHistory.map((item, index) => {
+                const color = currentMarket === 'us' ? 'text-blue-600' : 'text-indigo-600';
+                const bg = currentMarket === 'us' ? 'bg-blue-50 text-blue-700' : 'bg-indigo-50 text-indigo-700';
+                
                 return `<div class="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0 group">
-                    <span class="cursor-pointer group-hover:text-indigo-600 transition flex items-center gap-2" onclick="updateStock('${item.name}', '${item.market}')">
+                    <span class="cursor-pointer group-hover:${color} transition flex items-center gap-2" onclick="updateStock('${item.name}', '${item.market || 'kr'}')">
                         <span class="w-4 text-center text-xs font-bold text-gray-400">${index + 1}</span>
-                        <span class="text-xs">${flag}</span>
-                        <strong class="text-gray-800 group-hover:text-indigo-600">${item.name}</strong> 
+                        <strong class="text-gray-800 group-hover:${color}">${item.name}</strong> 
                     </span>
-                    <span class="bg-indigo-50 text-indigo-700 px-2 py-1 rounded-md font-bold text-xs shadow-sm">${item.score}점</span>
+                    <span class="${bg} px-2 py-1 rounded-md font-bold text-xs shadow-sm">${item.score}점</span>
                 </div>`;
             }).join('');
         }
 
-        // 스캐너 로직은 글자수 제한으로 축약 (기존과 동일하되 US는 ?market=us 로 찌르도록 응용 가능)
+        // 🌟 수정됨: 국가별 스캐너 유니버스 분리! (빠른 스캔을 위해 각각 20개로 최적화)
         async function runScanner() {
-            alert("스캐너 기능은 현재 탭 분리 최적화 중입니다! (개별 검색을 먼저 테스트해주세요!)");
+            const btn = document.getElementById('scannerBtn');
+            const container = document.getElementById('scannerList');
+            
+            btn.disabled = true;
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+            
+            // 국가별 우량주 풀 (해외는 영어 티커로 직접 쏴서 속도/정확도 100% 보장!)
+            const krUniverse = ['삼성전자', 'SK하이닉스', '현대차', '기아', 'KB금융', '신한지주', '하나금융지주', '메리츠금융지주', '삼성물산', 'POSCO홀딩스', 'LG화학', '현대모비스', '한국전력', 'SK텔레콤', 'KT', '기업은행', 'HMM', '삼성화재', '대한항공', '엔씨소프트'];
+            const usUniverse = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'NVDA', 'BRK.B', 'TSM', 'LLY', 'AVGO', 'NVO', 'ASML', 'NFLX', 'AMD', 'QCOM', 'INTC', 'PEP', 'KO', 'COST'];
+            
+            const universe = currentMarket === 'kr' ? krUniverse : usUniverse;
+            let results = [];
+
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center py-10 space-y-4">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+                    <div id="scanStatus" class="text-emerald-600 font-bold animate-pulse">엔진 예열 중...</div>
+                </div>
+            `;
+            const statusEl = document.getElementById('scanStatus');
+
+            for (let i = 0; i < universe.length; i++) {
+                const query = universe[i];
+                btn.innerText = `스캔 중... (${i+1}/${universe.length})`;
+                if (statusEl) statusEl.innerText = `[${i+1}/${universe.length}] '${query}' 재무 데이터 분석 중 🔍`;
+
+                try {
+                    let res = await fetch(`https://value-up-lens.onrender.com/api/stock/${encodeURIComponent(query)}?market=${currentMarket}`);
+                    if (res.ok) {
+                        let data = await res.json();
+                        results.push(data);
+                    }
+                } catch (e) { console.log(e); }
+            }
+
+            results.sort((a, b) => b.score - a.score);
+
+            container.innerHTML = results.map((item, index) => {
+                let rankIcon = index + 1;
+                if (index === 0) rankIcon = '🥇';
+                if (index === 1) rankIcon = '🥈';
+                if (index === 2) rankIcon = '🥉';
+
+                const color = currentMarket === 'us' ? 'text-blue-600' : 'text-emerald-600';
+                const bg = currentMarket === 'us' ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800';
+
+                return `
+                <div class="flex justify-between items-center py-2.5 border-b border-gray-100 last:border-0 group">
+                    <span class="cursor-pointer group-hover:${color} transition flex items-center gap-2" onclick="updateStock('${item.name}', '${currentMarket}')">
+                        <span class="w-5 text-center font-bold text-gray-400">${rankIcon}</span>
+                        <strong class="text-gray-800 group-hover:${color}">${item.name}</strong> 
+                        <span class="text-xs text-gray-400 hidden sm:inline">(PER ${item.per})</span>
+                    </span>
+                    <span class="${bg} px-2.5 py-1 rounded-md font-bold text-xs shadow-sm">${item.score}점</span>
+                </div>
+                `;
+            }).join('');
+            
+            btn.innerText = '스캐너 재실행';
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
         }
 
         window.onload = () => {
-            document.getElementById('stockSearch').addEventListener('keypress', function (e) { if (e.key === 'Enter') updateStock(); });
-            renderMyRanking(); 
+            document.getElementById('stockSearch').addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') updateStock();
+            });
+
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('market')) setMarket(urlParams.get('market'));
-            if (urlParams.get('code')) { document.getElementById('stockSearch').value = urlParams.get('code'); updateStock(); } 
-            else { document.getElementById('stockSearch').value = "삼성전자"; updateStock(); }
+            
+            // 초기 렌더링 호출
+            renderMyRanking(); 
+
+            if (urlParams.get('code')) {
+                document.getElementById('stockSearch').value = urlParams.get('code');
+                updateStock();
+            } else {
+                document.getElementById('stockSearch').value = "삼성전자";
+                updateStock();
+            }
         };
     </script>
 </body>
